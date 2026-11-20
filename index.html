@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ICONIC">
+<meta name="theme-color" content="#000000">
+<title>ICONIC</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.png">
+<link rel="icon" href="icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#070707;--card:#121212;--card2:#191919;--gold:#d4af37;--gold2:#f3dfa2;--line:rgba(212,175,55,.22);--txt:#ededed;--mut:#9b9b9b;--red:#e2574c;--ora:#e8a33d;--grn:#4fbf83}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:Montserrat,system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.4;padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+html{background:#000}body{min-height:100vh}header{position:sticky;top:0;z-index:5;background:linear-gradient(180deg,#000,#0a0a0a);border-bottom:1px solid var(--line);padding:calc(12px + env(safe-area-inset-top)) 16px 12px;display:flex;align-items:center;gap:14px}
+.logo{width:24px;height:24px;flex:none;border:2px solid var(--gold);transform:rotate(45deg);margin-left:4px;background:radial-gradient(circle at 35% 35%,#fff7d6 0,#e7c66a 22%,#7a5c14 55%,#120d02 80%);box-shadow:0 0 16px rgba(212,175,55,.55)}
+.brand{font-family:Cinzel,Georgia,serif;letter-spacing:4px;color:var(--gold2);font-size:20px;line-height:1;font-weight:600}
+.brand small{display:block;font-family:Montserrat,sans-serif;font-size:8px;letter-spacing:6px;color:var(--gold);margin-top:5px;font-weight:500}
+header .sp{flex:1}
+header a{color:var(--gold);text-decoration:none;font-size:20px}
+main{padding:14px 14px 20px;max-width:720px;margin:0 auto}
+h2{font-family:Cinzel,Georgia,serif;color:var(--gold2);font-size:16px;letter-spacing:1.5px;margin:22px 0 10px;font-weight:600}
+h2:first-child{margin-top:4px}
+h3{margin:0 0 6px;font-size:15px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:13px 14px;margin-bottom:10px}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.kpi{background:linear-gradient(160deg,#171307,#101010 60%);border:1px solid var(--line);border-radius:14px;padding:12px}
+.kpi b{display:block;font-size:24px;color:var(--gold2);font-family:Cinzel,Georgia,serif}
+.kpi span{font-size:12px;color:var(--mut)}
+.btn{display:inline-block;background:linear-gradient(135deg,#f6e3a8,#c9a24a);color:#111;border:0;border-radius:10px;padding:10px 14px;font-weight:600;font-size:14px;font-family:inherit;text-decoration:none;cursor:pointer}
+.btn.sec{background:transparent;color:var(--gold2);border:1px solid var(--line)}
+.btn.red{background:var(--red);color:#fff}
+.btn.wa{background:#25d366;color:#05230f}
+.btn.sm{padding:7px 10px;font-size:13px}
+.btn.full{width:100%;text-align:center;padding:13px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.between{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.mut{color:var(--mut);font-size:13px}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;border:1px solid var(--line);color:var(--gold2);white-space:nowrap}
+.t-Actif,.t-Libre,.t-Active{color:var(--grn);border-color:rgba(79,191,131,.4)}
+.t-Grâce,.t-À.préparer,.t-prep{color:var(--ora);border-color:rgba(232,163,61,.4)}
+.t-Occupée{color:var(--gold2)}
+.t-retirer,.t-Terminé,.t-Remplacée,.t-Fermé,.t-Inactive{color:var(--red);border-color:rgba(226,87,76,.4)}
+.t-attente{color:#8fb4ff;border-color:rgba(143,180,255,.4)}
+.al{border-left:3px solid var(--gold)}
+.al.r{border-left-color:var(--red)}.al.o{border-left-color:var(--ora)}.al.g{border-left-color:var(--grn)}
+nav{position:fixed;bottom:0;left:0;right:0;z-index:6;background:#000;border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;color:var(--mut);padding:9px 0 8px;font-size:10.5px;font-family:inherit;position:relative}
+nav button.on{color:var(--gold2)}
+nav .ic{display:block;font-size:19px;margin-bottom:2px}
+.badge{position:absolute;top:3px;left:calc(50% + 6px);background:var(--red);color:#fff;border-radius:9px;font-size:10px;padding:1px 5px;font-weight:700}
+input,select,textarea{width:100%;background:#0c0c0c;border:1px solid var(--line);color:var(--txt);border-radius:10px;padding:11px;font-size:16px;font-family:inherit;margin:4px 0 12px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold)}
+label.l{display:block;font-size:12.5px;color:var(--mut);letter-spacing:.3px}
+.choice{display:flex;gap:10px;align-items:center;border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:7px;font-size:14px}
+.choice input{width:auto;margin:0;accent-color:#d4af37}
+.mbg{position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+.modal{background:#101010;border-top:1px solid var(--gold);border-radius:20px 20px 0 0;width:100%;max-width:720px;max-height:90vh;overflow:auto;padding:18px 16px calc(26px + env(safe-area-inset-bottom))}
+.modal h2{margin-top:0}
+.toast{position:fixed;top:calc(74px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);background:#1c1c1c;border:1px solid var(--gold);color:var(--gold2);padding:10px 16px;border-radius:12px;z-index:40;max-width:90%;font-size:14px;box-shadow:0 8px 30px #000}
+.toast.err{border-color:var(--red);color:#ffb3ad}
+.acces{background:#0b0b0b;border:1px dashed var(--gold);border-radius:12px;padding:12px;margin:10px 0;font-size:14px}
+.acces div{padding:3px 0}
+.place{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-top:1px solid #222;font-size:14px}
+.loading{text-align:center;padding:60px 0;color:var(--mut)}
+.spin{width:34px;height:34px;margin:0 auto 14px;border:2px solid var(--gold);transform:rotate(45deg);animation:sp 1.4s infinite ease-in-out}
+@keyframes sp{50%{transform:rotate(225deg);opacity:.4}}
+.empty{color:var(--mut);font-size:13.5px;padding:6px 2px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.big{font-size:26px;font-family:Cinzel,Georgia,serif;color:var(--gold2)}
+details summary{cursor:pointer;color:var(--gold2);font-size:13.5px;margin-top:6px}
+hr{border:0;border-top:1px solid #222;margin:12px 0}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"></div>
+  <div class="brand">ICONIC<small>COLLECTION</small></div>
+  <div class="sp"></div>
+  <a id="sheet" href="#" target="_blank" title="Ouvrir le tableau">⚙︎</a>
+</header>
+<main id="main"><div class="loading"><div class="spin"></div>Chargement…</div></main>
+<nav id="nav"></nav>
+<div id="modal"></div>
+
+<script>
+let CFG = null;
+try { CFG = JSON.parse(localStorage.getItem('iconic_cfg') || 'null'); } catch (e) { CFG = null; }
+let TAB = (location.hash || '').replace('#', '') || 'accueil';
+let D = null, IX = {};
+let FILTRE_TYPE = '', RECH = '';
+
+/* ---------- utilitaires ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const F = n => String(Math.round(Number(n || 0))).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0') + '\u00a0F';
+const dt = iso => { if (!iso) return '—'; const d = new Date(iso); if (isNaN(d)) return '—'; return String(d.getUTCDate()).padStart(2,'0') + '/' + String(d.getUTCMonth()+1).padStart(2,'0') + '/' + d.getUTCFullYear(); };
+const isoDay = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toISOString().slice(0,10); };
+const todayIso = () => new Date().toISOString().slice(0,10);
+const tagCls = s => 't-' + String(s || '').replace('À retirer','retirer').replace('À préparer','prep').replace('En attente','attente');
+const tag = s => `<span class="tag ${tagCls(s)}">${esc(s)}</span>`;
+const jours = j => j === 0 ? "aujourd'hui" : j > 0 ? `dans ${j} j` : `il y a ${-j} j`;
+
+async function call(action, data, cfg) {
+  cfg = cfg || CFG;
+  let res;
+  try {
+    res = await fetch(cfg.url, { method: 'POST', body: JSON.stringify({ key: cfg.key, action, data: data || {} }) });
+  } catch (e) { throw 'Pas de connexion. Vérifie Internet et réessaie.'; }
+  let j;
+  try { j = await res.json(); } catch (e) { throw 'Réponse inattendue du serveur. As-tu bien déployé la nouvelle version du code ?'; }
+  if (!j.ok) throw j.erreur || 'Erreur';
+  return j.data;
+}
+
+/* ---------- connexion (une seule fois) ---------- */
+function vConnexion(msg) {
+  $('#nav').innerHTML = '';
+  $('#main').innerHTML = `<h2>Bienvenue ✨</h2>
+  <div class="card"><p style="margin-top:0">Colle ici <b>le lien de ton application</b>, celui reçu par e-mail qui contient <b>?k=</b>.</p>
+  <p class="mut">Ton lien est enregistré uniquement sur ce téléphone. Tu n'auras à le faire qu'une fois.</p>
+  <textarea id="cx_l" rows="4" placeholder="https://script.google.com/macros/s/…/exec?k=…"></textarea>
+  ${msg ? `<div class="card al r" style="font-size:14px">${esc(msg)}</div>` : ''}
+  <button class="btn full" onclick="connexion()">Se connecter</button></div>`;
+}
+async function connexion() {
+  const brut = $('#cx_l').value.trim();
+  let cfg;
+  try {
+    const u = new URL(brut);
+    const key = u.searchParams.get('k');
+    if (!key) throw 0;
+    cfg = { url: u.origin + u.pathname, key };
+  } catch (e) { return vConnexion("Ce lien n'est pas valide : il doit contenir « /exec?k= »."); }
+  busy(true);
+  try {
+    await call('load', {}, cfg);
+    CFG = cfg;
+    try { localStorage.setItem('iconic_cfg', JSON.stringify(cfg)); } catch (e) {}
+    await refresh();
+  } catch (e) { vConnexion(String(e)); }
+  finally { busy(false); }
+}
+function deconnexion() {
+  openModal(`<h2>Se déconnecter ?</h2><p class="mut">Tu devras recoller ton lien pour revenir.</p>
+  <div class="row"><button class="btn red" onclick="try{localStorage.removeItem('iconic_cfg')}catch(e){};CFG=null;D=null;closeModal();vConnexion()">Se déconnecter</button><button class="btn sec" onclick="closeModal()">Annuler</button></div>`);
+}
+function toast(msg, err) {
+  const t = document.createElement('div'); t.className = 'toast' + (err ? ' err' : ''); t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), err ? 5000 : 2600);
+}
+async function act(action, data, okMsg) {
+  try {
+    busy(true);
+    const r = await call(action, data);
+    await refresh(true);
+    if (okMsg) toast(okMsg);
+    return r;
+  } catch (e) { toast(e, true); throw e; }
+  finally { busy(false); }
+}
+let busyEl = null;
+function busy(on) {
+  if (on && !busyEl) { busyEl = document.createElement('div'); busyEl.className = 'mbg'; busyEl.style.alignItems = 'center'; busyEl.style.zIndex = 35; busyEl.innerHTML = '<div class="spin"></div>'; document.body.appendChild(busyEl); }
+  if (!on && busyEl) { busyEl.remove(); busyEl = null; }
+}
+function openModal(html) { $('#modal').innerHTML = `<div class="mbg" onclick="if(event.target===this)closeModal()"><div class="modal">${html}</div></div>`; }
+function closeModal() { $('#modal').innerHTML = ''; }
+
+async function refresh(silent) {
+  if (!CFG) return vConnexion();
+  try {
+    D = await call('load');
+    IX = { cl:{}, cp:{}, pl:{}, ca:{}, ab:{}, se:{} };
+    D.clients.forEach(x => IX.cl[x.id] = x); D.comptes.forEach(x => IX.cp[x.id] = x);
+    D.places.forEach(x => IX.pl[x.id] = x); D.cartes.forEach(x => IX.ca[x.id] = x);
+    D.abos.forEach(x => IX.ab[x.id] = x); D.sessions.forEach(x => IX.se[x.code] = x);
+    $('#sheet').href = D.ssUrl;
+    render();
+  } catch (e) {
+    if (String(e).indexOf('Accès refusé') >= 0) { try { localStorage.removeItem('iconic_cfg'); } catch (x) {} CFG = null; return vConnexion('Ta clé n\'est plus valide. Colle à nouveau ton lien.'); }
+    if (!silent) $('#main').innerHTML = `<div class="card al r">Erreur : ${esc(e)}</div><button class="btn full" onclick="refresh()">Réessayer</button>`; else toast(e, true);
+  }
+}
+
+/* ---------- navigation ---------- */
+const TABS = [['accueil','◆','Accueil'],['valider','💰','Valider'],['clients','👥','Clients'],['comptes','🎬','Comptes'],['cartes','💳','Cartes'],['gains','📊','Gains']];
+function go(t) { TAB = t; try { history.replaceState(null, '', '#' + t); } catch (e) {} render(); window.scrollTo(0,0); }
+function render() {
+  if (!D) return;
+  $('#nav').innerHTML = TABS.map(([k,ic,l]) => `<button class="${TAB===k?'on':''}" onclick="go('${k}')"><span class="ic">${ic}</span>${l}${k==='valider'&&D.aValider.length?`<span class="badge">${D.aValider.length}</span>`:''}</button>`).join('');
+  const v = { accueil: vAccueil, valider: vValider, clients: vClients, comptes: vComptes, cartes: vCartes, gains: vGains }[TAB] || vAccueil;
+  $('#main').innerHTML = v();
+}
+
+/* ---------- ACCUEIL ---------- */
+function vAccueil() {
+  const g = D.digest, actifs = D.abos.filter(a => ['Actif','Grâce'].includes(a.statut)).length;
+  const libres = Object.keys(g.libres).map(t => `<div class="between mut"><span>${esc(t)}</span><span><b style="color:var(--gold2)">${g.libres[t].libres}</b> / ${g.libres[t].total} places libres</span></div>`).join('');
+  let h = `<h2>Tableau de bord</h2>
+  <div class="kpis">
+    <div class="kpi"><b>${actifs}</b><span>abonnés actifs</span></div>
+    <div class="kpi"><b>${F(D.gains[0] ? D.gains[0].benefice : 0)}</b><span>bénéfice ce mois</span></div>
+    <div class="kpi"><b>${g.expirent.length}</b><span>expirent bientôt</span></div>
+    <div class="kpi"><b>${g.aRetirer.length}</b><span>à retirer</span></div>
+  </div>
+  <div class="card" style="margin-top:10px">${libres || '<div class="empty">Ajoute tes comptes dans l’onglet « Comptes ».</div>'}</div>
+  <button class="btn full" onclick="mVenteManuelle()">＋ Vente manuelle</button>`;
+
+  if (D.aValider.length) h += `<div class="card al" style="margin-top:12px"><div class="between"><span>💰 <b>${D.aValider.length}</b> paiement(s) à valider</span><button class="btn sm" onclick="go('valider')">Voir</button></div></div>`;
+
+  h += sect('🔴 À retirer', g.aRetirer, b => `<div class="card al r"><div class="between"><div><b>${esc(b.client)}</b> ${tag(b.type)}<div class="mut">${esc(b.compte)} · place ${b.place} · profil ${esc(b.profil)}</div><div class="mut">Expiré le ${dt(b.expiration)}</div></div></div>
+    <div class="row" style="margin-top:8px"><button class="btn sm red" onclick="mLiberer('${b.id}')">Libéré</button></div></div>`);
+  h += sect('🟠 Places à préparer', g.aPreparer, p => `<div class="card al o"><div class="between"><div><b>${esc(p.compte)}</b> · place ${p.n}<div class="mut">${esc(p.type)} · depuis ${p.jours} j</div></div><button class="btn sm" onclick="mPreparer('${p.id}')">Profil + code</button></div></div>`);
+  h += sect('💳 Comptes à payer', g.comptes, c => `<div class="card al ${c.jours<0?'r':'o'}"><div class="between"><div><b>${esc(c.mail)}</b> ${tag(c.type)}<div class="mut">${c.jours<0?'⚠️ Expiré le ':'Expire le '}${dt(c.expiration)} (${jours(c.jours)}) · ${F(c.cout)}</div><div class="mut">${c.carte?'Carte '+esc(c.carte)+' · ':''}${c.clients} client(s)</div></div><button class="btn sm" onclick="mPayer('${c.id}')">Payé</button></div></div>`);
+  h += sect('⏳ Expirent bientôt', g.expirent, b => `<div class="card al"><div class="between"><div><b>${esc(b.client)}</b> ${tag(b.type)}<div class="mut">Expire le ${dt(b.expiration)} (${jours(b.jours)})</div></div><a class="btn sm wa" href="${b.wa}" target="_blank">Rappel</a></div></div>`);
+  h += sect('🟠 Délai de grâce', g.grace, b => `<div class="card al o"><div class="between"><div><b>${esc(b.client)}</b> ${tag(b.type)}<div class="mut">Expiré le ${dt(b.expiration)} · à retirer après le ${dt(b.limite)}</div></div><a class="btn sm wa" href="${b.wa}" target="_blank">Rappel</a></div></div>`);
+  h += sect('⌛ En attente de place', g.enAttente, b => `<div class="card al"><b>${esc(b.client)}</b> ${tag(b.type)}<div class="mut">Sera placé(e) dès qu'une place est prête.</div></div>`);
+  if (g.anomalies.length) h += `<h2>⚠️ Anomalies</h2>` + g.anomalies.map(a => `<div class="card al r" style="font-size:14px">${esc(a)}</div>`).join('');
+  if (!g.aRetirer.length && !g.aPreparer.length && !g.comptes.length && !g.expirent.length && !g.grace.length && !g.anomalies.length)
+    h += `<div class="card al g" style="margin-top:14px">✨ Tout est en ordre, rien à faire pour le moment.</div>`;
+  return h;
+}
+function sect(t, list, fn) { return list && list.length ? `<h2>${t}</h2>` + list.map(fn).join('') : ''; }
+
+/* ---------- VALIDER ---------- */
+function clientOptions(selId, sugg) {
+  const tri = D.clients.slice().sort((a,b) => a.nom.localeCompare(b.nom));
+  let o = `<option value="">➕ Nouveau client</option>`;
+  if (sugg && sugg.length) o += `<optgroup label="Noms proches">` + sugg.map(id => IX.cl[id]).filter(Boolean).map(c => `<option value="${c.id}" ${c.id===selId?'selected':''}>${esc(c.nom)} · ${esc(c.numeros.join(', '))}</option>`).join('') + `</optgroup>`;
+  o += `<optgroup label="Tous les clients">` + tri.map(c => `<option value="${c.id}" ${c.id===selId&&!(sugg||[]).includes(c.id)?'selected':''}>${esc(c.nom)} · ${esc(c.numeros.join(', '))}</option>`).join('') + `</optgroup>`;
+  return o;
+}
+function vValider() {
+  if (!D.aValider.length) return `<h2>Paiements à valider</h2><div class="card al g">✨ Aucun paiement en attente.</div>`;
+  return `<h2>Paiements à valider</h2>` + D.aValider.map(v => {
+    const cands = v.candidats.length ? v.candidats : D.sessions.map(s => s.code);
+    const sess = cands.map(c => { const s = IX.se[c]; if (!s) return ''; return `<label class="choice"><input type="radio" name="s_${v.id}" value="${c}" ${v.preselection===c?'checked':''}><span>${esc(s.libelle)} <span class="mut">· ${F(s.prix)}</span></span></label>`; }).join('');
+    return `<div class="card">
+      <div class="between"><div class="big">${F(v.montant)}</div><span class="mut">${dt(v.date)}</span></div>
+      <div class="mut" style="margin:4px 0 10px">${esc(v.numero)} · ${esc(v.nom || 'sans nom')}</div>
+      ${v.clientId ? `<div class="tag t-Actif" style="margin-bottom:8px">Client reconnu : ${esc(IX.cl[v.clientId] ? IX.cl[v.clientId].nom : '')}</div>` : `<div class="tag t-attente" style="margin-bottom:8px">Numéro inconnu</div>`}
+      ${!v.candidats.length ? `<div class="mut" style="color:var(--ora)">⚠️ Ce montant ne correspond à aucune session. Choisis-la ou ignore ce paiement.</div>` : ''}
+      <label class="l" style="margin-top:6px">Session</label>${sess}
+      <label class="l">Client</label>
+      <select id="cl_${v.id}" onchange="document.getElementById('nw_${v.id}').style.display=this.value?'none':'block'">${clientOptions(v.clientId, v.suggestions)}</select>
+      <div id="nw_${v.id}" style="display:${v.clientId?'none':'block'}"><label class="l">Nom du nouveau client</label><input id="nm_${v.id}" value="${esc(v.nom)}"></div>
+      <div class="row"><button class="btn" style="flex:1" onclick="valider('${v.id}')">✓ Valider</button><button class="btn sec" onclick="ignorer('${v.id}')">Ignorer</button></div>
+    </div>`;
+  }).join('');
+}
+async function valider(id) {
+  const s = document.querySelector(`input[name="s_${id}"]:checked`);
+  if (!s) return toast('Choisis la session.', true);
+  const r = await act('valider', { venteId: id, session: s.value, clientId: $('#cl_' + id).value, nom: $('#nm_' + id).value });
+  showResult(r);
+}
+function ignorer(id) {
+  openModal(`<h2>Ignorer ce paiement ?</h2><p class="mut">Il ne sera pas compté dans tes ventes (par exemple, un transfert personnel).</p>
+  <div class="row"><button class="btn red" onclick="closeModal();act('ignorer',{venteId:'${id}'},'Paiement ignoré')">Ignorer</button><button class="btn sec" onclick="closeModal()">Annuler</button></div>`);
+}
+function showResult(r) {
+  if (!r) return;
+  const titre = { Nouveau: '✨ Nouveau client', Retour: '👋 Client de retour', Renouvellement: '🔁 Renouvellement' }[r.genre] || 'Vente validée';
+  let h = `<h2>${titre}</h2><div><b>${esc(r.client)}</b> · ${esc(r.session)}</div><div class="mut">Jusqu'au ${dt(r.expiration)}</div>
+    <div class="card al ${r.acces?'g':'o'}" style="margin-top:10px">${esc(r.info)}</div>`;
+  if (r.acces) h += `<div class="acces"><div>📧 ${esc(r.acces.mail)}</div><div>🔑 ${esc(r.acces.mdp)}</div><div>👤 Profil : <b>${esc(r.acces.profil)}</b></div><div>🔢 Code : <b>${esc(r.acces.code)}</b></div></div>`;
+  if (r.whatsapp) h += `<a class="btn wa full" href="${r.whatsapp}" target="_blank" onclick="setTimeout(closeModal,400)">Envoyer sur WhatsApp</a><div style="height:8px"></div>`;
+  h += `<button class="btn sec full" onclick="closeModal()">Fermer</button>`;
+  openModal(h);
+}
+
+/* ---------- VENTE MANUELLE ---------- */
+function mVenteManuelle() {
+  const sess = D.sessions.map(s => `<option value="${s.code}">${esc(s.libelle)} · ${F(s.prix)}</option>`).join('');
+  openModal(`<h2>Vente manuelle</h2>
+  <p class="mut">Pour un paiement en espèces, ou pour enregistrer tes clients actuels.</p>
+  <label class="l">Client</label><select id="vm_cl" onchange="$('#vm_new').style.display=this.value?'none':'block'">${clientOptions('', [])}</select>
+  <div id="vm_new"><label class="l">Nom</label><input id="vm_nom"><label class="l">Numéro</label><input id="vm_num" inputmode="tel" placeholder="70 00 00 00"></div>
+  <label class="l">Session</label><select id="vm_s" onchange="vmPlaces()">${sess}</select>
+  <label class="l">Date de début</label><input id="vm_d" type="date" value="${todayIso()}">
+  <label class="l">Place (facultatif : laisse vide pour l'attribution automatique)</label><select id="vm_p"></select>
+  <button class="btn full" onclick="venteManuelle()">Enregistrer</button>`);
+  vmPlaces();
+}
+function vmPlaces() {
+  const s = IX.se[$('#vm_s').value]; if (!s) return;
+  const libres = D.places.filter(p => p.etat === 'Libre' && IX.cp[p.compte] && IX.cp[p.compte].type === s.type && IX.cp[p.compte].statut === 'Actif');
+  $('#vm_p').innerHTML = `<option value="">Automatique</option>` + libres.map(p => `<option value="${p.id}">${esc(IX.cp[p.compte].mail)} · place ${p.n} (${esc(p.profil)})</option>`).join('');
+}
+async function venteManuelle() {
+  const d = { clientId: $('#vm_cl').value, nom: $('#vm_nom').value, numero: $('#vm_num').value, session: $('#vm_s').value, date: $('#vm_d').value, placeId: $('#vm_p').value };
+  if (!d.clientId && !d.numero) return toast('Indique le numéro du client.', true);
+  closeModal();
+  showResult(await act('manuelle', d));
+}
+
+/* ---------- LIBÉRER / PRÉPARER ---------- */
+function mLiberer(aboId) {
+  const a = IX.ab[aboId], c = IX.cl[a.client] || {}, cp = IX.cp[a.compte] || {}, p = IX.pl[a.place] || {};
+  openModal(`<h2>Retirer ${esc(c.nom)} ?</h2>
+  <p>Retire d'abord ${esc(c.nom)} dans l'application :</p>
+  <div class="acces"><div>📧 ${esc(cp.mail || '—')}</div><div>Place ${p.n || '—'} · profil <b>${esc(p.profil || '—')}</b></div></div>
+  <p class="mut">Ensuite, appuie sur « C'est fait ». Tu pourras saisir le nouveau profil et le nouveau code.</p>
+  <div class="row"><button class="btn red" onclick="liberer('${aboId}')">C'est fait</button><button class="btn sec" onclick="closeModal()">Annuler</button></div>`);
+}
+async function liberer(aboId) {
+  closeModal();
+  const r = await act('liberer', { aboId }, 'Place libérée');
+  if (r && r.placeId) mPreparer(r.placeId);
+}
+function mPreparer(placeId) {
+  const p = IX.pl[placeId]; if (!p) return;
+  const cp = IX.cp[p.compte] || {};
+  openModal(`<h2>${p.etat === 'Occupée' ? 'Modifier' : 'Préparer'} la place ${p.n}</h2>
+  <div class="mut" style="margin-bottom:10px">${esc(cp.mail)} · ${esc(cp.type)}${p.profil ? ' · ancien profil : ' + esc(p.profil) : ''}</div>
+  <label class="l">Nouveau profil</label><input id="pp_p" value="${p.etat==='Occupée'?esc(p.profil):''}">
+  <label class="l">Nouveau code</label><input id="pp_c" inputmode="numeric" value="${p.etat==='Occupée'?esc(p.code):''}">
+  <button class="btn full" onclick="preparer('${placeId}')">Enregistrer</button>`);
+}
+async function preparer(placeId) {
+  const d = { placeId, profil: $('#pp_p').value, code: $('#pp_c').value };
+  if (!d.profil.trim() || !d.code.trim()) return toast('Saisis le profil et le code.', true);
+  closeModal();
+  const r = await act('preparer', d, 'Place prête ✓');
+  if (r && r.placement) showResult(r.placement);
+}
+
+/* ---------- CLIENTS ---------- */
+function vClients() {
+  const q = RECH.toLowerCase();
+  const list = D.clients.filter(c => !q || c.nom.toLowerCase().includes(q) || c.numeros.join(' ').includes(q))
+    .sort((a,b) => a.nom.localeCompare(b.nom));
+  return `<h2>Clients (${D.clients.length})</h2>
+  <input placeholder="🔍 Nom ou numéro" value="${esc(RECH)}" oninput="RECH=this.value;$('#cls').innerHTML=clientsList()">
+  <div id="cls">${clientsList(list)}</div>`;
+}
+function clientsList(list) {
+  if (!list) { const q = RECH.toLowerCase(); list = D.clients.filter(c => !q || c.nom.toLowerCase().includes(q) || c.numeros.join(' ').includes(q)).sort((a,b) => a.nom.localeCompare(b.nom)); }
+  if (!list.length) return `<div class="empty">Aucun client.</div>`;
+  return list.map(c => {
+    const abos = D.abos.filter(a => a.client === c.id && a.statut !== 'Terminé');
+    return `<div class="card" onclick="mClient('${c.id}')"><div class="between"><b>${esc(c.nom)}</b><span class="mut">${esc(c.numeros.join(', '))}</span></div>
+      ${abos.map(a => `<div class="mut" style="margin-top:4px">${tag(a.statut)} ${esc(a.type)} · jusqu'au ${dt(a.expiration)}</div>`).join('') || '<div class="mut" style="margin-top:4px">Aucun abonnement en cours</div>'}</div>`;
+  }).join('');
+}
+function accesWa(a) {
+  const c = IX.cl[a.client], cp = IX.cp[a.compte], p = IX.pl[a.place], s = IX.se[a.session];
+  if (!c || !cp || !p) return '';
+  const msg = `Bonjour ${c.nom} 👋\nVoici vos accès ${s ? s.libelle : a.type} chez ICONIC Collection :\n\n📧 Mail : ${cp.mail}\n🔑 Mot de passe : ${cp.mdp}\n👤 Profil : ${p.profil}\n🔢 Code : ${p.code}\n\n📅 Valable jusqu'au ${dt(a.expiration)}.\nMerci de ne modifier aucune information du compte 🙏`;
+  return `https://wa.me/${c.numeros[0] ? D.params.indicatif + c.numeros[0] : ''}?text=${encodeURIComponent(msg)}`;
+}
+function mClient(id) {
+  const c = IX.cl[id];
+  const abos = D.abos.filter(a => a.client === id).sort((a,b) => (a.statut==='Terminé') - (b.statut==='Terminé'));
+  openModal(`<h2>${esc(c.nom)}</h2>
+  ${abos.map(a => { const cp = IX.cp[a.compte], p = IX.pl[a.place]; const enCours = a.statut !== 'Terminé';
+    return `<div class="card"><div class="between"><span>${esc(a.type)}</span>${tag(a.statut)}</div>
+    <div class="mut">${esc(IX.se[a.session] ? IX.se[a.session].libelle : '')} · du ${dt(a.debut)} au ${dt(a.expiration)}</div>
+    ${cp && p && enCours ? `<div class="mut">${esc(cp.mail)} · place ${p.n} · profil ${esc(p.profil)}</div>` : ''}
+    ${enCours && a.place ? `<div class="row" style="margin-top:8px"><a class="btn sm wa" href="${accesWa(a)}" target="_blank">Envoyer les accès</a><button class="btn sm sec" onclick="mLiberer('${a.id}')">Retirer</button></div>` : ''}</div>`; }).join('') || '<div class="empty">Aucun abonnement.</div>'}
+  <hr><label class="l">Nom</label><input id="ec_n" value="${esc(c.nom)}">
+  <label class="l">Numéros (séparés par des virgules)</label><input id="ec_t" inputmode="tel" value="${esc(c.numeros.join(', '))}">
+  <label class="l">Notes</label><textarea id="ec_o" rows="2">${esc(c.notes)}</textarea>
+  <button class="btn full" onclick="closeModal();act('modifierClient',{id:'${id}',nom:$('#ec_n').value,numeros:$('#ec_t').value,notes:$('#ec_o').value},'Client mis à jour')">Enregistrer</button>`);
+  // les champs existent après openModal
+}
+
+/* ---------- COMPTES ---------- */
+function vComptes() {
+  const types = D.types.map(t => t.type);
+  const list = D.comptes.filter(c => c.statut === 'Actif' && (!FILTRE_TYPE || c.type === FILTRE_TYPE));
+  const fermes = D.comptes.filter(c => c.statut !== 'Actif');
+  return `<h2>Comptes</h2>
+  <div class="row" style="margin-bottom:10px"><button class="btn" onclick="mCompte()">＋ Ajouter un compte</button>
+  <select style="flex:1;margin:0;width:auto" onchange="FILTRE_TYPE=this.value;render()"><option value="">Tous les types</option>${types.map(t => `<option ${t===FILTRE_TYPE?'selected':''}>${esc(t)}</option>`).join('')}</select></div>
+  ${list.map(compteCard).join('') || '<div class="empty">Aucun compte pour le moment.</div>'}
+  ${fermes.length ? `<details><summary>Comptes fermés (${fermes.length})</summary>${fermes.map(c => `<div class="card mut">${esc(c.mail)} · ${esc(c.type)}</div>`).join('')}</details>` : ''}`;
+}
+function compteCard(c) {
+  const pls = D.places.filter(p => p.compte === c.id).sort((a,b) => a.n - b.n);
+  const occ = pls.filter(p => p.etat === 'Occupée').length;
+  const ca = IX.ca[c.carte];
+  const exp = c.expiration ? new Date(c.expiration) : null;
+  const j = exp ? Math.round((exp - new Date(D.aujourdhui)) / 864e5) : null;
+  return `<div class="card">
+    <div class="between"><b style="word-break:break-all">${esc(c.mail)}</b>${tag(c.type)}</div>
+    <div class="mut" style="margin-top:4px">${occ}/${pls.length} occupées · ${F(c.cout)}/mois</div>
+    <div class="mut">Expire le ${dt(c.expiration)}${j!=null?` (${jours(j)})`:''} ${j!=null&&j<=5?'⚠️':''}</div>
+    <div class="mut">Carte : ${ca ? esc(ca.repere) : '<span style="color:var(--red)">aucune</span>'}${c.nom||c.tel ? ' · ' + esc(c.nom) + ' ' + esc(c.tel) : ''}</div>
+    <details><summary>Places et accès</summary>
+      <div class="mut" style="margin:6px 0">🔑 Mot de passe : ${esc(c.mdp)}</div>
+      ${pls.map(p => `<div class="place"><div><b>${p.n}.</b> ${esc(p.profil || '—')} <span class="mut">· code ${esc(p.code || '—')}</span><div class="mut">${p.client && IX.cl[p.client] ? esc(IX.cl[p.client].nom) : ''}</div></div>
+        <div class="row">${tag(p.etat)}<button class="btn sm sec" onclick="mPreparer('${p.id}')">${p.etat==='À préparer'?'Préparer':'Modifier'}</button></div></div>`).join('')}
+    </details>
+    <div class="row" style="margin-top:10px"><button class="btn sm" onclick="mPayer('${c.id}')">Payé</button><button class="btn sm sec" onclick="mCompte('${c.id}')">Modifier</button><button class="btn sm sec" onclick="mFermer('${c.id}')">Fermer</button></div>
+  </div>`;
+}
+function carteOptions(sel, exclureCompte) {
+  const actives = D.cartes.filter(c => c.statut === 'Active');
+  return `<option value="">— Aucune carte —</option>` + actives.map(ca => {
+    const n = D.comptes.filter(c => c.statut === 'Actif' && c.carte === ca.id && c.id !== exclureCompte).length;
+    const plein = n >= D.params.maxCarte && ca.id !== sel;
+    return `<option value="${ca.id}" ${ca.id===sel?'selected':''} ${plein?'disabled':''}>${esc(ca.repere)} (${n}/${D.params.maxCarte})${plein?' – complète':''}</option>`;
+  }).join('');
+}
+function mCompte(id) {
+  const c = id ? IX.cp[id] : null;
+  const t0 = D.types[0] || { type:'', places:5, cout:0 };
+  openModal(`<h2>${c ? 'Modifier le compte' : 'Nouveau compte'}</h2>
+  ${c ? `<div class="mut" style="margin-bottom:8px">${esc(c.type)}</div>` : `<label class="l">Type</label><select id="fc_type" onchange="fcType()">${D.types.map(t => `<option>${esc(t.type)}</option>`).join('')}</select>`}
+  <label class="l">Mail</label><input id="fc_mail" type="email" autocapitalize="off" value="${c?esc(c.mail):''}">
+  <label class="l">Mot de passe</label><input id="fc_mdp" autocapitalize="off" value="${c?esc(c.mdp):''}">
+  <div class="grid2"><div><label class="l">Nom</label><input id="fc_nom" value="${c?esc(c.nom):''}"></div><div><label class="l">Téléphone</label><input id="fc_tel" inputmode="tel" value="${c?esc(c.tel):''}"></div></div>
+  <label class="l">Carte (max ${D.params.maxCarte} comptes par carte)</label><select id="fc_carte">${carteOptions(c ? c.carte : '', c ? c.id : '')}</select>
+  <div class="grid2"><div><label class="l">Coût mensuel (F)</label><input id="fc_cout" inputmode="numeric" value="${c ? c.cout : t0.cout}"></div><div><label class="l">Nombre de places</label><input id="fc_pl" inputmode="numeric" value="${c ? c.places : t0.places}" oninput="fcProfils()"></div></div>
+  <label class="l">Date d'expiration de l'abonnement</label><input id="fc_exp" type="date" value="${c ? isoDay(c.expiration) : ''}">
+  ${c ? '' : `<label class="l">Profils et codes des places (tu peux les compléter plus tard)</label><div id="fc_profils"></div>`}
+  <button class="btn full" onclick="saveCompte('${id || ''}')">Enregistrer</button>`);
+  if (!c) fcProfils();
+}
+function fcType() { const t = D.types.find(x => x.type === $('#fc_type').value); if (t) { $('#fc_cout').value = t.cout; $('#fc_pl').value = t.places; fcProfils(); } }
+function fcProfils() {
+  const el = $('#fc_profils'); if (!el) return;
+  const n = Math.min(Number($('#fc_pl').value) || 0, 12);
+  const old = [...el.querySelectorAll('.pr')].map(r => [r.children[0].value, r.children[1].value]);
+  el.innerHTML = Array.from({length:n}, (_,i) => `<div class="grid2 pr"><input placeholder="Profil ${i+1}" value="${esc((old[i]||[])[0]||'')}"><input placeholder="Code ${i+1}" inputmode="numeric" value="${esc((old[i]||[])[1]||'')}"></div>`).join('');
+}
+async function saveCompte(id) {
+  const d = { mail: $('#fc_mail').value, mdp: $('#fc_mdp').value, nom: $('#fc_nom').value, tel: $('#fc_tel').value, carte: $('#fc_carte').value, cout: $('#fc_cout').value, places: $('#fc_pl').value, expiration: $('#fc_exp').value };
+  if (!d.mail.trim()) return toast('Le mail est obligatoire.', true);
+  if (id) { d.id = id; }
+  else { d.type = $('#fc_type').value; d.profils = [...document.querySelectorAll('#fc_profils .pr')].map(r => ({ profil: r.children[0].value, code: r.children[1].value })); }
+  try { await act(id ? 'modifierCompte' : 'ajouterCompte', d, id ? 'Compte mis à jour' : 'Compte ajouté ✓'); closeModal(); } catch (e) {}
+}
+function mPayer(id) {
+  const c = IX.cp[id];
+  openModal(`<h2>Paiement du compte</h2><div class="mut" style="margin-bottom:10px">${esc(c.mail)} · expire le ${dt(c.expiration)}</div>
+  <label class="l">Montant payé (F)</label><input id="py_m" inputmode="numeric" value="${c.cout}">
+  <p class="mut">La date d'expiration avancera d'un mois.</p>
+  <button class="btn full" onclick="closeModal();act('payerCompte',{id:'${id}',montant:$('#py_m').value},'Paiement noté ✓')">Confirmer le paiement</button>`);
+}
+function mFermer(id) {
+  const c = IX.cp[id];
+  openModal(`<h2>Fermer ce compte ?</h2><p>${esc(c.mail)}</p><p class="mut">Possible uniquement si plus aucun client n'est dessus. Il restera dans l'historique.</p>
+  <div class="row"><button class="btn red" onclick="closeModal();act('fermerCompte',{id:'${id}'},'Compte fermé')">Fermer le compte</button><button class="btn sec" onclick="closeModal()">Annuler</button></div>`);
+}
+
+/* ---------- CARTES ---------- */
+function vCartes() {
+  const actives = D.cartes.filter(c => c.statut === 'Active'), autres = D.cartes.filter(c => c.statut !== 'Active');
+  const card = ca => {
+    const cps = D.comptes.filter(c => c.statut === 'Actif' && c.carte === ca.id);
+    const plein = cps.length >= D.params.maxCarte;
+    return `<div class="card ${cps.length > D.params.maxCarte ? 'al r' : ''}">
+      <div class="between"><b>${esc(ca.repere)}</b>${tag(ca.statut)}</div>
+      <div class="mut">${esc(ca.titulaire || '')}${ca.remplacee && IX.ca[ca.remplacee] ? ' · remplacée par ' + esc(IX.ca[ca.remplacee].repere) : ''}</div>
+      ${ca.statut === 'Active' ? `<div style="margin:8px 0"><span class="tag ${plein?'t-prep':'t-Actif'}">${cps.length}/${D.params.maxCarte} comptes</span></div>
+      ${cps.map(c => `<div class="mut">• ${esc(c.mail)} (${esc(c.type)})</div>`).join('')}
+      <div class="row" style="margin-top:10px"><button class="btn sm sec" onclick="mCarte('${ca.id}')">Modifier</button><button class="btn sm" onclick="mRemplacer('${ca.id}')">Remplacer</button></div>` : ''}
+    </div>`;
+  };
+  return `<h2>Cartes</h2>
+  <div class="kpis"><div class="kpi"><b>${actives.length}</b><span>cartes actives</span></div><div class="kpi"><b>${D.comptes.filter(c => c.statut==='Actif' && c.carte).length}</b><span>comptes reliés</span></div></div>
+  <button class="btn full" style="margin:12px 0" onclick="mCarte()">＋ Ajouter une carte</button>
+  ${actives.map(card).join('') || '<div class="empty">Aucune carte.</div>'}
+  ${autres.length ? `<details><summary>Anciennes cartes (${autres.length})</summary>${autres.map(card).join('')}</details>` : ''}
+  <h2>Historique</h2>
+  ${D.historique.map(h => `<div class="place"><div><b>${esc(h.action)}</b> · ${esc(h.detail)}<div class="mut">${dt(h.date)} · ${esc(IX.ca[h.id] ? IX.ca[h.id].repere : h.id)}</div></div></div>`).join('') || '<div class="empty">Rien pour le moment.</div>'}`;
+}
+function mCarte(id) {
+  const ca = id ? IX.ca[id] : null;
+  openModal(`<h2>${ca ? 'Modifier la carte' : 'Nouvelle carte'}</h2>
+  <label class="l">Repère (jamais le numéro complet)</label><input id="ca_r" placeholder="Ex. Visa Coris …4521" value="${ca?esc(ca.repere):''}">
+  <label class="l">Titulaire</label><input id="ca_t" value="${ca?esc(ca.titulaire):''}">
+  <label class="l">Notes</label><input id="ca_n" value="${ca?esc(ca.notes):''}">
+  ${ca ? `<label class="l">Statut</label><select id="ca_s"><option ${ca.statut==='Active'?'selected':''}>Active</option><option ${ca.statut==='Inactive'?'selected':''}>Inactive</option></select>` : ''}
+  <button class="btn full" onclick="saveCarte('${id||''}')">Enregistrer</button>`);
+}
+async function saveCarte(id) {
+  const d = { repere: $('#ca_r').value, titulaire: $('#ca_t').value, notes: $('#ca_n').value };
+  if (id) { d.id = id; d.statut = $('#ca_s').value; }
+  try { await act(id ? 'modifierCarte' : 'ajouterCarte', d, 'Carte enregistrée ✓'); closeModal(); } catch (e) {}
+}
+function mRemplacer(id) {
+  const ca = IX.ca[id];
+  const n = D.comptes.filter(c => c.statut === 'Actif' && c.carte === id).length;
+  const autres = D.cartes.filter(c => c.statut === 'Active' && c.id !== id);
+  openModal(`<h2>Remplacer ${esc(ca.repere)}</h2><p class="mut">Ses ${n} compte(s) passeront sur la nouvelle carte, et l'ancienne sera gardée dans l'historique.</p>
+  <label class="l">Nouvelle carte</label><select id="rc_s" onchange="$('#rc_new').style.display=this.value?'none':'block'"><option value="">➕ Une nouvelle carte</option>${autres.map(c => `<option value="${c.id}">${esc(c.repere)} (${D.comptes.filter(x => x.statut==='Actif' && x.carte===c.id).length}/${D.params.maxCarte})</option>`).join('')}</select>
+  <div id="rc_new"><label class="l">Repère</label><input id="rc_r" placeholder="Ex. Visa Ecobank …7788"><label class="l">Titulaire</label><input id="rc_t" value="${esc(ca.titulaire)}"></div>
+  <button class="btn full" onclick="remplacer('${id}')">Remplacer</button>`);
+}
+async function remplacer(id) {
+  const d = { id, nouvelleId: $('#rc_s').value, repere: $('#rc_r').value, titulaire: $('#rc_t').value };
+  try { await act('remplacerCarte', d, 'Carte remplacée ✓'); closeModal(); } catch (e) {}
+}
+
+/* ---------- GAINS ---------- */
+function vGains() {
+  return `<h2>Gains</h2>` + D.gains.map((g, i) => `<div class="card ${i===0?'al':''}">
+    <div class="between"><b style="text-transform:capitalize">${esc(g.mois)}</b><span class="mut">${g.ventes} vente(s)</span></div>
+    <div class="big" style="margin:6px 0">${F(g.benefice)}</div><div class="mut" style="margin-top:-4px;margin-bottom:8px">bénéfice net</div>
+    <div class="grid2 mut"><div>Encaissé<br><b style="color:var(--txt)">${F(g.encaisse)}</b></div><div>Dépenses comptes<br><b style="color:var(--txt)">${F(g.depenses)}</b></div></div>
+    <div class="mut" style="margin-top:8px">${g.nouveaux} nouveaux · ${g.renouvellements} renouvellements · ${g.retours} retours</div>
+    ${Object.keys(g.parType).map(t => `<div class="between mut" style="margin-top:4px"><span>${esc(t)}</span><span>${g.parType[t].ventes} · ${F(g.parType[t].encaisse)}</span></div>`).join('')}
+    ${g.recu > g.encaisse ? `<div class="mut" style="margin-top:6px">Frais ajoutés par les clients : ${F(g.recu - g.encaisse)}</div>` : ''}
+  </div>`).join('') + `<button class="btn sec full" style="margin-top:20px" onclick="deconnexion()">Se déconnecter de cet appareil</button>`;
+}
+
+// Actualise quand on revient dans l'app
+document.addEventListener('visibilitychange', () => { if (!document.hidden && CFG && D) refresh(true); });
+refresh();
+</script>
+</body>
+</html>
