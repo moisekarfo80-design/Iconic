@@ -158,7 +158,7 @@ details summary{cursor:pointer;color:var(--g2);font-size:13.5px;list-style:none}
 
 <script>
 /* ═════════ ICONIC Collection · application v2 ═════════ */
-const APP_VERSION = '2.3.0';
+const APP_VERSION = '2.3.1';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('iconic_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('iconic_' + k, JSON.stringify(v)); } catch (e) {} },
@@ -528,12 +528,20 @@ SCREENS.succes = function (r) {
 function sortir(btn) { const t = btn && btn.closest('.task'); if (t) t.classList.add('out'); }
 function mLiberer(aboId, btn) {
   const a = IX.ab[aboId] || {}, c = IX.cl[a.client] || {}, cp = IX.cp[a.compte] || {}, p = IX.pl[a.place] || {};
+  window._LBR = false;
+  const vRet = D.ventes.filter(v => v.statut === 'Validée' && String(v.abo || '').split(',').includes(aboId) && v.prix > 0).sort((x, y) => new Date(y.date) - new Date(x.date))[0];
   confirmer({ titre: 'Retirer ' + (c.nom || '') + ' ?', icon: 'userx', danger: true, ok: "C'est fait",
-    texte: `Retire d'abord ${esc(c.nom)} dans l'application :<div class="acces" style="margin-top:10px;text-align:left"><div>${esc(cp.mail || '—')}</div><div>Place ${p.n || '—'} · profil <b>${esc(p.profil || '—')}</b></div></div>`,
+    texte: `Retire d'abord ${esc(c.nom)} dans l'application :<div class="acces" style="margin-top:10px;text-align:left"><div>${esc(cp.mail || '—')}</div><div>Place ${p.n || '—'} · profil <b>${esc(p.profil || '—')}</b></div></div>${vRet ? `<label style="display:flex;gap:12px;align-items:flex-start;text-align:left;margin-top:14px;padding:12px;border-radius:14px;background:#0b0b0b;border:1px solid var(--ln);cursor:pointer"><input type="checkbox" style="width:22px;height:22px;flex:none;margin:0;accent-color:#d4af37" onchange="window._LBR=this.checked"><span><b>Retirer aussi son argent</b><br><span class="mu">Son paiement de ${F(vRet.prix)} du ${dt(vRet.date)} sera enlevé de tes gains. Coche seulement si ce paiement était une erreur.</span></span></label>` : ''}`,
     note: 'Tu pourras annuler pendant 10 secondes.',
     action: async () => {
       sortir(btn);
-      try { const r = await act('liberer', { aboId }, 'Place libérée', { undo: () => call('annulerLiberation', { aboId }) }); if (r && r.placeId) setTimeout(() => mPreparer(r.placeId), 700); } catch (e) {}
+      const retirerArgent = !!window._LBR;
+      try {
+        const r = await act('liberer', { aboId, retirerArgent }, null);
+        const rb = r && r.rembourse;
+        undoToast(rb ? `Place libérée · ${F(rb.montant)} retirés de tes gains` : 'Place libérée', () => call('annulerLiberation', { aboId, venteId: rb ? rb.venteId : '', montant: rb ? rb.montant : 0 }));
+        if (r && r.placeId) setTimeout(() => mPreparer(r.placeId), 700);
+      } catch (e) {}
     } });
 }
 function mPreparer(placeId) {
@@ -1043,7 +1051,7 @@ function vListeComptes() {
       return `<button class="tap card anim" style="width:100%;text-align:left;color:inherit;margin-bottom:8px;cursor:pointer;animation-delay:${i * .04}s" onclick="push('compte',['${c.id}'])">
         <div class="sb"><b style="font-size:14.5px;overflow:hidden;text-overflow:ellipsis">${esc(c.mail)}</b><span style="font-weight:600;font-size:13px;color:${r.profit >= 0 ? 'var(--ok)' : 'var(--ko)'}">${MASK ? '•••' : (r.profit >= 0 ? '+ ' : '− ') + F(Math.abs(r.profit))}</span></div>
         <div class="bar" style="margin-top:10px"><i data-w="${r.places ? r.occupees / r.places * 100 : 0}%"></i></div>
-        <div class="sb mu" style="margin-top:6px"><span>${r.occupees}/${r.places} occupées</span><span style="color:${d != null && d <= 5 ? 'var(--wa)' : 'var(--mu)'}">paiement ${d == null ? '—' : jours(d)}</span></div></button>`; }).join('');
+        <div class="sb mu" style="margin-top:6px"><span>${r.occupees}/${r.places} payées${r.impayes ? ` · <span style="color:var(--wa)">${r.impayes} impayée(s)</span>` : ''}</span><span style="color:${d != null && d <= 5 ? 'var(--wa)' : 'var(--mu)'}">paiement ${d == null ? '—' : jours(d)}</span></div></button>`; }).join('');
   });
   const autres = D.comptes.filter(c => c.statut !== 'Actif');
   if (!x) x = '<div class="empty">Aucun compte. Ajoute ton premier compte avec « Ajouter ».</div>';
@@ -1067,7 +1075,7 @@ SCREENS.compte = function (id) {
   return `${head(esc(c.mail), esc(c.type.toUpperCase()), `<button class="ib" aria-label="Modifier le compte" onclick="mCompte('${id}')">${I('edit')}</button>`, true)}
   <div style="padding:16px 20px calc(40px + var(--bot))">
   <div class="grid2 anim">
-    <div class="card" style="background:linear-gradient(150deg,${r.profit >= 0 ? '#1d2a1f' : '#2a1d1d'},#121212 70%);border-color:${r.profit >= 0 ? 'rgba(79,191,131,.35)' : 'rgba(226,87,76,.35)'}"><div class="mu" style="font-size:11px">Rentabilité / mois</div><div style="font-size:20px;font-weight:600;margin-top:4px;color:${r.profit >= 0 ? 'var(--ok)' : 'var(--ko)'}">${MASK ? '•••••' : (r.profit >= 0 ? '+ ' : '− ') + F(Math.abs(r.profit))}</div>${r.vides ? `<div style="font-size:11px;color:var(--wa);margin-top:6px">${r.vides} place(s) vide(s) : −${MASK ? '•••' : F(r.manque)}</div>` : '<div style="font-size:11px;color:var(--ok);margin-top:6px">Complet</div>'}</div>
+    <div class="card" style="background:linear-gradient(150deg,${r.profit >= 0 ? '#1d2a1f' : '#2a1d1d'},#121212 70%);border-color:${r.profit >= 0 ? 'rgba(79,191,131,.35)' : 'rgba(226,87,76,.35)'}"><div class="mu" style="font-size:11px">Rentabilité / mois</div><div style="font-size:20px;font-weight:600;margin-top:4px;color:${r.profit >= 0 ? 'var(--ok)' : 'var(--ko)'}">${MASK ? '•••••' : (r.profit >= 0 ? '+ ' : '− ') + F(Math.abs(r.profit))}</div>${r.vides || r.impayes ? `<div style="font-size:11px;color:var(--wa);margin-top:6px">${[r.impayes ? r.impayes + ' impayée(s)' : '', r.vides ? r.vides + ' vide(s)' : ''].filter(Boolean).join(' · ')} : −${MASK ? '•••' : F(r.manque)}</div>` : '<div style="font-size:11px;color:var(--ok);margin-top:6px">Complet et tout payé</div>'}</div>
     <div class="card"><div class="mu" style="font-size:11px">${ca ? esc(ca.repere) : 'Aucune carte'} · ${M(c.cout)}</div><div style="font-size:20px;font-weight:600;margin-top:4px;color:${d != null && d <= 5 ? 'var(--wa)' : 'var(--tx)'}">${d == null ? '—' : jours(d)}</div><div class="bar" style="margin-top:10px"><i data-w="${d == null ? 0 : Math.max(4, Math.min(100, 100 - d / 30 * 100))}%" style="background:${d != null && d <= 5 ? 'var(--wa)' : 'var(--g)'}"></i></div></div>
   </div>
   <div class="sb" style="margin:22px 0 10px"><span class="serif" style="color:var(--g2);font-size:16px;letter-spacing:1px">Plan des places</span><span class="mu">${nb('Occupée')} occ. · ${nb('Libre')} libre · ${nb('À préparer')} à prép.</span></div>
@@ -1204,7 +1212,7 @@ function vGains() {
   <div class="mu" style="margin-top:8px">${g.nouveaux || 0} nouveaux · ${g.renouvellements || 0} renouvellements · ${g.retours || 0} retours · ${g.departs || 0} départs${g.recu > g.encaisse && !MASK ? ' · frais ajoutés : ' + F(g.recu - g.encaisse) : ''}</div>
   ${vSante(b.sante)}
   <h2>Rentabilité par compte</h2>
-  ${b.rentabilite.map(r => `<div class="list-item"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis">${esc(r.mail.split('@')[0])}</div><div class="mu" style="font-size:11px">${r.occupees}/${r.places} places${r.vides ? ' · ' + r.vides + ' vide(s)' : ''} · ${esc(r.type)}</div></div><div style="font-weight:600;font-size:14px;color:${r.profit >= 0 ? 'var(--ok)' : 'var(--ko)'}">${MASK ? '•••' : (r.profit >= 0 ? '+ ' : '− ') + F(Math.abs(r.profit))}</div></div>`).join('') || '<div class="mu">Aucun compte.</div>'}
+  ${b.rentabilite.map(r => `<div class="list-item"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis">${esc(r.mail.split('@')[0])}</div><div class="mu" style="font-size:11px">${r.occupees}/${r.places} payées${r.impayes ? ` · <span style="color:var(--wa)">${r.impayes} impayée(s)</span>` : ''}${r.vides ? ' · ' + r.vides + ' vide(s)' : ''} · ${esc(r.type)}</div></div><div style="font-weight:600;font-size:14px;color:${r.profit >= 0 ? 'var(--ok)' : 'var(--ko)'}">${MASK ? '•••' : (r.profit >= 0 ? '+ ' : '− ') + F(Math.abs(r.profit))}</div></div>`).join('') || '<div class="mu">Aucun compte.</div>'}
   <h2>Par type</h2>
   ${Object.keys(g.parType || {}).map(t => { const v = g.parType[t], top = Math.max(1, ...Object.values(g.parType).map(x => x.encaisse)); return `<div style="margin-bottom:12px"><div class="sb" style="font-size:13px"><span>${esc(t)}</span><span style="color:var(--g2);font-weight:600">${M(v.encaisse)}</span></div><div class="bar" style="margin-top:6px;height:8px"><i data-w="${v.encaisse / top * 100}%" style="background:linear-gradient(90deg,#c9a24a,#f6e3a8)"></i></div><div class="mu" style="font-size:11px;margin-top:4px">${v.ventes} vente(s)</div></div>`; }).join('') || '<div class="mu">Pas encore de ventes ce mois-ci.</div>'}`;
 }
@@ -1217,6 +1225,7 @@ function vSante(h) {
   const ev = (h.evolution || []).slice().reverse(), mx = Math.max(1, ...ev.map(e => Math.max(e.nouveaux, e.departs)));
   const conseils = [];
   if (h.partisApres1 != null && h.partisApres1 >= 40) conseils.push(`<b>${h.partisApres1} %</b> de tes clients partis ne sont restés qu'un mois. Un rappel chaleureux 3 jours avant la fin du 1er mois peut en garder une partie.`);
+  if (h.impayees) conseils.push(`<b>${h.impayees}</b> place(s) occupée(s) par des clients qui n'ont pas payé : elles te coûtent sans rien rapporter.`);
   if (h.aRetirer) conseils.push(`<b>${h.aRetirer}</b> client(s) ont dépassé leur délai : relance-les avec le lien de paiement avant de les retirer.`);
   if (h.solde < 0) conseils.push(`Ce mois-ci, tu perds plus de clients (${h.departs30}) que tu n'en gagnes (${h.nouveaux30}).`);
   if (h.occupation < 80 && h.placesLibres) conseils.push(`${h.placesLibres} place(s) libre(s) : chaque place remplie, c'est environ ${MASK ? '•••' : F(h.panier)} de plus par mois.`);
@@ -1224,7 +1233,7 @@ function vSante(h) {
   return `<h2>Santé du business</h2>
   <div class="card gold anim" style="display:flex;gap:16px;align-items:center">
     <div style="width:76px;height:76px;border-radius:50%;flex:none;padding:4px;background:conic-gradient(${col} 0 ${h.score}%,#2a2a2a 0 100%)"><div style="width:100%;height:100%;border-radius:50%;background:#151515;display:flex;align-items:center;justify-content:center;flex-direction:column"><b style="font-size:22px;color:${col}">${h.score}</b><span class="mu" style="font-size:9px">/ 100</span></div></div>
-    <div style="flex:1"><div class="serif" style="font-size:18px;color:${col}">${esc(h.niveau)}</div><div class="mu" style="line-height:1.45">${h.actifs} clients actifs · ${h.occupation} % des places occupées · ${h.fideles} fidèle(s) depuis 6 mois ou plus</div></div>
+    <div style="flex:1"><div class="serif" style="font-size:18px;color:${col}">${esc(h.niveau)}</div><div class="mu" style="line-height:1.45">${h.actifs} clients actifs · ${h.occupation} % des places payées · ${h.fideles} fidèle(s) depuis 6 mois ou plus</div></div>
   </div>
   <div class="grid2 anim" style="margin-top:10px;animation-delay:.05s">
     ${tile(h.vie != null ? h.vie + ' mois' : '—', 'durée de vie moyenne d’un client' + (h.viePartis != null ? ` (ceux qui partent : ${h.viePartis} mois)` : ''))}

@@ -11,7 +11,7 @@
  * ═══════════════════════════════════════════════════════════
  */
 
-const VERSION = '2.3.0';
+const VERSION = '2.3.1';
 const MARQUE = 'ICONIC Collection';
 const TZ = 'Africa/Ouagadougou';
 
@@ -661,7 +661,29 @@ function liberer_(d) {
   }
   abo.Statut = 'Terminé'; abo['Mis à jour'] = now_();
   update_(S.ABOS, abo);
-  return { placeId: placeId };
+  let rembourse = null;
+  if (d.retirerArgent) rembourse = retirerArgent_(abo, client);
+  return { placeId: placeId, rembourse: rembourse };
+}
+
+/** Retire de tes gains le dernier paiement de cet abonnement (paiement enregistré par erreur). */
+function retirerArgent_(abo, client) {
+  const sess = {}; sessions_().forEach(function (x) { sess[x.code] = x; });
+  const v = rows_(S.VENTES).filter(function (x) { return x.Statut === 'Validée' && String(x.Abonnement || '').split(',').indexOf(abo.ID) >= 0; })
+    .sort(function (a, b) { return new Date(b.Date) - new Date(a.Date); })[0];
+  if (!v) return null;
+  const abos = String(v.Abonnement).split(','), codes = String(v.Session || '').split('+');
+  let montant = Number(v.Prix || 0);
+  if (abos.length > 1) {   // paiement groupé : on ne retire que la part de cet abonnement
+    const tarif = codes.reduce(function (t, c) { return t + (sess[c] ? sess[c].prix : 0); }, 0);
+    const part = sess[codes[abos.indexOf(abo.ID)]] || sess[abo.Session];
+    montant = tarif && part ? Math.round(Number(v.Prix || 0) * part.prix / tarif) : 0;
+  }
+  v.Prix = Number(v.Prix || 0) - montant;
+  if (v.Prix <= 0) { v.Prix = 0; v.Statut = 'Annulée'; }
+  update_(S.VENTES, v);
+  hist_('Vente', v.ID, 'Argent retiré', client.Nom + ' · ' + F_(montant) + ' retirés des gains (retrait)');
+  return { venteId: v.ID, montant: montant };
 }
 
 /** Saisie du nouveau profil + code. Place libre → attribuée aux clients en attente. */
@@ -1259,6 +1281,10 @@ function annulerLiberation_(d) {
   update_(S.PLACES, pl);
   abo.Statut = statutPour_(abo, P); abo['Mis à jour'] = now_();
   update_(S.ABOS, abo);
+  if (d.venteId && d.montant) {
+    const v = rows_(S.VENTES).find(function (x) { return x.ID === d.venteId; });
+    if (v) { v.Prix = Number(v.Prix || 0) + Number(d.montant); v.Statut = 'Validée'; update_(S.VENTES, v); }
+  }
   return { ok: true };
 }
 
@@ -1399,14 +1425,19 @@ function business_(P, sess, clients, abos) {
   // Rentabilité par compte
   const rentabilite = rows_(S.COMPTES).filter(function (c) { return c.Statut === 'Actif'; }).map(function (c) {
     const pls = places.filter(function (p) { return p.Compte === c.ID; });
-    let rev = 0, occ = 0;
+    // Seules les places des clients à jour (actifs ou dans les 3 jours de grâce) rapportent.
+    // Une place occupée par un client expiré depuis plus de 3 jours ou qui te doit compte comme une perte.
+    let rev = 0, occ = 0, impayes = 0, perte = 0;
     pls.forEach(function (p) {
       const a = aboIx[p.Abonnement];
-      if (p['État'] === 'Occupée' && a && EN_COURS.indexOf(a.Statut) >= 0) { occ++; rev += mensuel(a.Session); }
+      if (p['État'] !== 'Occupée' || !a || EN_COURS.indexOf(a.Statut) < 0) return;
+      if (a.Statut === 'Actif' || a.Statut === 'Grâce') { occ++; rev += mensuel(a.Session); }
+      else { impayes++; perte += mensuel(a.Session) || (prixType[c.Type] || 0); }
     });
-    const vides = pls.length - occ, cout = Number(c['Coût mensuel'] || 0);
-    return { id: c.ID, mail: String(c.Mail), type: c.Type, places: pls.length, occupees: occ, vides: vides,
-      revenu: Math.round(rev), cout: cout, profit: Math.round(rev - cout), manque: Math.round(vides * (prixType[c.Type] || 0)) };
+    const vides = pls.length - occ - impayes, cout = Number(c['Coût mensuel'] || 0);
+    return { id: c.ID, mail: String(c.Mail), type: c.Type, places: pls.length, occupees: occ, payees: occ, impayes: impayes, vides: vides,
+      revenu: Math.round(rev), cout: cout, profit: Math.round(rev - cout), perte: Math.round(perte),
+      manque: Math.round(vides * (prixType[c.Type] || 0) + perte) };
   }).sort(function (a, b) { return b.profit - a.profit; });
 
   // Taux de renouvellement (mois en cours, sinon mois précédent)
@@ -1479,7 +1510,7 @@ function sante_(clients, abos, places, mensuel, taux, g) {
     const finAbo = l.filter(function (a) { return a.Statut === 'Terminé'; }).map(function (a) { return new Date(a['Mis à jour']).getTime(); })
       .concat(l.filter(function (a) { return a.Statut === 'À retirer'; }).map(function (a) { return day_(a.Expiration).getTime(); }));
     fiches.push({ id: c.ID, nom: c.Nom, actif: actif, debut: debut, mois: Math.max(1, Math.round((fin - debut) / (30.4 * J))),
-      mensuel: l.filter(function (a) { return VIVANT.indexOf(a.Statut) >= 0; }).reduce(function (s, a) { return s + mensuel(a.Session); }, 0),
+      mensuel: l.filter(function (a) { return a.Statut === 'Actif' || a.Statut === 'Grâce' || a.Statut === 'En attente'; }).reduce(function (s, a) { return s + mensuel(a.Session); }, 0),
       parti: actif ? 0 : (finAbo.length ? Math.max.apply(null, finAbo) : fin) });
   });
   const moy = function (l) { return l.length ? Math.round(10 * l.reduce(function (s, x) { return s + x.mois; }, 0) / l.length) / 10 : null; };
@@ -1492,7 +1523,9 @@ function sante_(clients, abos, places, mensuel, taux, g) {
   const vie = moy(fiches);
   const churn = (actifs.length + departs30) ? Math.round(100 * departs30 / (actifs.length + departs30)) : null;
   const unMois = partis.length ? Math.round(100 * partis.filter(function (f) { return f.mois <= 1; }).length / partis.length) : null;
-  const tot = places.length, occ = places.filter(function (p) { return p['État'] === 'Occupée'; }).length;
+  const aboIx = index_(abos), payee = function (p) { const a = aboIx[p.Abonnement]; return p['État'] === 'Occupée' && a && (a.Statut === 'Actif' || a.Statut === 'Grâce'); };
+  const tot = places.length, occ = places.filter(payee).length;
+  const impayees = places.filter(function (p) { return p['État'] === 'Occupée' && !payee(p); }).length;
   const occupation = tot ? Math.round(100 * occ / tot) : 0;
   const fideles = actifs.filter(function (f) { return f.mois >= 6; }).sort(function (a, b) { return b.mois - a.mois; });
   const tr = taux != null ? taux : (churn != null ? 100 - churn : 80);
@@ -1503,7 +1536,7 @@ function sante_(clients, abos, places, mensuel, taux, g) {
     actifs: actifs.length, vie: vie, vieActifs: moy(actifs), viePartis: moy(partis),
     panier: panier, valeur: vie != null ? Math.round(panier * vie) : 0, revenuMensuel: Math.round(revenuMensuel),
     departs30: departs30, nouveaux30: nouveaux30, solde: solde, churn: churn, partisApres1: unMois,
-    occupation: occupation, placesLibres: places.filter(function (p) { return p['État'] === 'Libre'; }).length,
+    occupation: occupation, impayees: impayees, placesLibres: places.filter(function (p) { return p['État'] === 'Libre'; }).length,
     aRetirer: abos.filter(function (a) { return a.Statut === 'À retirer'; }).length,
     total: fiches.length, importes: fiches.filter(function (f) { return parClient[f.id].every(function (a) { return a.Import; }); }).length,
     fideles: fideles.length, top: fideles.slice(0, 5).map(function (f) { return { id: f.id, nom: f.nom, mois: f.mois }; }),
