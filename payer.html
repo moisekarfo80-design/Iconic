@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Payer · ICONIC Collection</title>
+<meta name="theme-color" content="#000000">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600&family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 18%,#2a210a 0%,#070707 55%);color:#ededed;font-family:Montserrat,system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;padding:56px 22px 40px;text-align:center}
+.gem{width:46px;height:46px;border:2px solid #d4af37;transform:rotate(45deg);background:radial-gradient(circle at 35% 35%,#fff7d6,#e7c66a 25%,#7a5c14 60%,#120d02 85%);box-shadow:0 0 34px rgba(212,175,55,.6)}
+.w{font-family:Cinzel,serif;font-size:26px;letter-spacing:6px;color:#f3dfa2;margin-top:28px}
+.s{font-size:9px;letter-spacing:7px;color:#d4af37;margin-top:4px}
+.m{font-family:Cinzel,serif;font-size:44px;color:#f6e3a8;margin:38px 0 4px}
+.mu{color:#a3a3a3;font-size:14px;line-height:1.5}
+.btn{display:block;width:100%;max-width:380px;margin:26px auto 0;padding:18px;border-radius:18px;background:linear-gradient(135deg,#ff8a1e,#ff6a00);color:#fff;font-weight:700;font-size:17px;text-decoration:none;box-shadow:0 10px 30px rgba(255,106,0,.35)}
+.code{margin:22px auto 0;max-width:380px;width:100%;background:#111;border:1px dashed #d4af37;border-radius:14px;padding:14px;font-size:20px;letter-spacing:1px;color:#f3dfa2;font-variant-numeric:tabular-nums;word-break:break-all}
+.cp{margin-top:10px;background:transparent;border:1px solid #3a3115;color:#f3dfa2;border-radius:12px;padding:12px 18px;font:600 14px Montserrat,sans-serif}
+ol{text-align:left;max-width:380px;margin:24px auto 0;padding-left:20px;color:#c7c7c7;font-size:14px;line-height:1.6}
+</style>
+</head>
+<body>
+<div class="gem"></div><div class="w">ICONIC</div><div class="s">COLLECTION</div>
+<div class="m" id="m"></div>
+<div class="mu">Paiement Orange Money</div>
+<a class="btn" id="go" href="#">Payer avec Orange Money</a>
+<div class="mu" id="aide" style="margin-top:12px">Le code s'affiche dans ton clavier : appuie sur <b>Appeler</b>, puis tape ton code secret.</div>
+<div class="code" id="code"></div>
+<button class="cp" id="cp">Copier le code</button>
+<ol id="ios" style="display:none"><li>Touche <b>Copier le code</b>.</li><li>Ouvre l'app <b>Téléphone</b>, onglet <b>Clavier</b>.</li><li>Colle le code (appui long), puis appuie sur <b>Appeler</b>.</li><li>Tape ton code secret Orange Money.</li></ol>
+<script>
+const q = new URLSearchParams(location.search);
+const code = (q.get('c') || '').replace(/[^0-9*#]/g, '');
+const m = Number(q.get('m') || 0);
+document.getElementById('m').textContent = m ? String(m).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' F' : '';
+document.getElementById('code').textContent = code;
+document.getElementById('go').href = 'tel:' + code.replace(/#/g, '%23');
+if (/iPhone|iPad|iPod/.test(navigator.userAgent)) { document.getElementById('ios').style.display = 'block'; document.getElementById('aide').textContent = "Sur iPhone, si le bouton ne marche pas, suis les étapes ci-dessous."; }
+document.getElementById('cp').onclick = function () {
+  const b = this;
+  const ok = () => { b.textContent = '✓ Code copié'; setTimeout(() => b.textContent = 'Copier le code', 2000); };
+  if (navigator.clipboard) navigator.clipboard.writeText(code).then(ok, () => {});
+  else { const t = document.createElement('textarea'); t.value = code; document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); ok(); }
+};
+</script>
+</body>
+</html>

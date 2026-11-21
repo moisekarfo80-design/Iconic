@@ -158,6 +158,7 @@ details summary{cursor:pointer;color:var(--g2);font-size:13.5px;list-style:none}
 
 <script>
 /* ═════════ ICONIC Collection · application v2 ═════════ */
+const APP_VERSION = '2.3.0';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('iconic_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('iconic_' + k, JSON.stringify(v)); } catch (e) {} },
@@ -183,6 +184,7 @@ const daysTo = iso => iso ? Math.round((new Date(iso) - new Date(D.aujourdhui)) 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const isoDay = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toISOString().slice(0, 10); };
 const icons = {
+  heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>', book: '<path d="M6 3h12v18H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><circle cx="12" cy="10" r="2.5"/><path d="M8.5 16c.6-1.6 2-2.5 3.5-2.5s2.9.9 3.5 2.5"/>',
   diamond: '<path d="M12 3l8 9-8 9-8-9z"/>', users: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6"/><path d="M16 5a3 3 0 0 1 0 6M18 14c2 .6 3 2.7 3 6"/>',
   box: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M8 4v5"/>', chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   plus: '<path d="M12 5v14M5 12h14"/>', inbox: '<path d="M4 13h4l2 3h4l2-3h4"/><path d="M5 5h14l1 8v6H4v-6z"/>', search: '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>',
@@ -198,20 +200,28 @@ const icons = {
 };
 const I = (n, st) => `<svg viewBox="0 0 24 24" fill="none" stroke="${st || 'currentColor'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[n]}</svg>`;
 const tagStat = s => {
-  const m = { 'Actif': 't-ok', 'Libre': 't-ok', 'Active': 't-ok', 'Grâce': 't-wa', 'À préparer': 't-wa', 'À retirer': 't-ko', 'Terminé': 't-ko', 'Annulé': 't-ko', 'Bloqué': 't-ko', 'Remplacée': 't-ko', 'Inactive': 't-ko', 'En attente': 't-bl' };
+  const m = { 'Actif': 't-ok', 'Libre': 't-ok', 'Active': 't-ok', 'Grâce': 't-wa', 'À préparer': 't-wa', 'À retirer': 't-ko', 'Terminé': 't-ko', 'Annulé': 't-ko', 'Bloqué': 't-ko', 'Remplacée': 't-ko', 'Inactive': 't-ko', 'En attente': 't-bl', 'Dette': 't-wa', 'Inventaire': 't-bl' };
   return `<span class="tag ${m[s] || ''}">${esc(s)}</span>`;
 };
 
+const EC = ['Actif', 'Grâce', 'À retirer', 'En attente', 'Dette'];
 /* ---------- serveur ---------- */
 async function call(action, data, cfg) {
   cfg = cfg || CFG;
+  if (action !== 'load' && !['reglages', 'app', 'bloquer'].includes(action) && !(data && data.confirmer === false)) data = Object.assign({}, data || {}, { _load: 1 });
   let res;
   try { res = await fetch(cfg.url, { method: 'POST', body: JSON.stringify({ key: cfg.key, action, data: data || {} }) }); }
   catch (e) { throw 'Pas de connexion. Vérifie Internet et réessaie.'; }
   let j;
   try { j = await res.json(); } catch (e) { throw 'Réponse inattendue du serveur. As-tu déployé la nouvelle version du code ?'; }
   if (!j.ok) throw j.erreur || 'Erreur';
+  if (data && data._load && j.data && j.data.load) { appliquer(j.data.load); return j.data.r; }
   return j.data;
+}
+let LAST_LOAD = 0;
+function appliquer(d) {
+  D = d; LAST_LOAD = Date.now(); LS.set('cache', D); indexer();
+  if (!LOCKED) { render(); renderOverlay(); }
 }
 function indexer() {
   IX = { cl: {}, cp: {}, pl: {}, ca: {}, ab: {}, se: {} };
@@ -219,14 +229,13 @@ function indexer() {
   D.cartes.forEach(x => IX.ca[x.id] = x); D.abos.forEach(x => IX.ab[x.id] = x); D.sessions.forEach(x => IX.se[x.code] = x);
 }
 let loading = null;
-async function refresh(quiet) {
+async function refresh(quiet, force) {
   if (!CFG) return;
   if (loading) return loading;
+  if (quiet && !force && Date.now() - LAST_LOAD < 4000) return;
   loading = (async () => {
     try {
-      D = await call('load');
-      LS.set('cache', D);
-      indexer(); render(); renderOverlay();
+      appliquer(await call('load'));
     } catch (e) {
       if (String(e).indexOf('Accès refusé') >= 0) { LS.del('cfg'); CFG = null; return vConnexion("Ta clé n'est plus valide. Colle à nouveau ton lien."); }
       if (!quiet || !D) toast(String(e), true);
@@ -248,7 +257,7 @@ async function act(action, data, msg, opts) {
 let busyEl = null, busyT = null;
 function busy(on) {
   clearTimeout(busyT);
-  if (on) busyT = setTimeout(() => { if (!busyEl) { busyEl = document.createElement('div'); busyEl.className = 'mbg'; busyEl.style.alignItems = 'center'; busyEl.style.zIndex = 70; busyEl.innerHTML = '<div class="gem sm" style="width:30px;height:30px"></div>'; document.body.appendChild(busyEl); } }, 250);
+  if (on) busyT = setTimeout(() => { if (!busyEl) { busyEl = document.createElement('div'); busyEl.className = 'mbg'; busyEl.style.alignItems = 'center'; busyEl.style.zIndex = 70; busyEl.innerHTML = '<div class="gem sm" style="width:30px;height:30px"></div>'; document.body.appendChild(busyEl); } }, 400);
   else if (busyEl) { busyEl.remove(); busyEl = null; }
 }
 
@@ -350,6 +359,7 @@ function vAccueil() {
   let x = `<div class="sb anim">
     <div class="row" style="gap:14px"><div class="gem sm" style="margin-left:4px"></div><div><div class="mu">${h < 18 ? 'Bonjour' : 'Bonsoir'}${prenom ? ',' : ''}</div><div class="serif" style="font-size:20px;color:var(--g2);letter-spacing:1px">${esc(prenom || 'ICONIC')}</div></div></div>
     <div class="row"><button class="ib" aria-label="Paiements à valider" onclick="${D.aValider.length ? "push('valider')" : "toast('Aucun paiement à valider')"}">${I('inbox')}${D.aValider.length ? `<span class="badge">${D.aValider.length}</span>` : ''}</button>
+    <button class="ib" aria-label="Rechercher" onclick="push('recherche')">${I('search')}</button>
     <button class="ib" aria-label="Réglages" onclick="push('reglages')">${I('gear')}</button></div></div>
   <div class="hero anim" style="margin-top:20px;animation-delay:.05s">
     <div class="sb"><span style="font-size:12px;color:#c9b77a;letter-spacing:1px">BÉNÉFICE · ${esc(String(g0.mois || '').toUpperCase())}</span>${eyeBtn()}</div>
@@ -368,12 +378,24 @@ function vAccueil() {
   // tâches
   const T = [];
   D.aValider.length && T.push({ k: 'v', ic: 'inbox', bg: 'rgba(212,175,55,.12)', st: '#f6e3a8', t: D.aValider.length + ' paiement(s) à valider', s: 'touche pour valider', b: `<button class="btn sm" onclick="push('valider')">Valider</button>` });
-  g.aRetirer.forEach(r => T.push({ k: 'r' + r.id, ic: 'userx', bg: 'rgba(226,87,76,.14)', st: '#ff8a80', t: 'Retirer ' + r.client, s: `${r.compte} · place ${r.place} · grâce terminée`, b: `<button class="btn sm red" onclick="mLiberer('${r.id}',this)">Libéré</button>` }));
-  g.aPreparer.forEach(p => T.push({ k: 'p' + p.id, ic: 'key', bg: 'rgba(232,163,61,.14)', st: '#f0b65a', t: 'Préparer la place ' + p.n, s: `${p.compte} · nouveau profil + code`, b: `<button class="btn sm sec" onclick="mPreparer('${p.id}')">Préparer</button>` }));
-  g.comptes.forEach(c => T.push({ k: 'c' + c.id, ic: 'card', bg: 'rgba(232,163,61,.14)', st: '#f0b65a', t: 'Payer ' + c.mail.split('@')[0], s: `${c.jours < 0 ? 'expiré ' : 'expire '}${jours(c.jours)}${c.carte ? ' · ' + c.carte : ''}`, b: `<button class="btn sm" onclick="mPayer('${c.id}',this)">Payé</button>` }));
+  if (g.aRetirer.length > 3) T.push({ k: 'rr', ic: 'userx', bg: 'rgba(226,87,76,.14)', st: '#ff8a80', t: g.aRetirer.length + ' abonnements expirés non payés', s: 'à relancer, puis à retirer s’ils ne paient pas', b: `<button class="btn sm red" onclick="mExpires()">Voir</button>` });
+  else g.aRetirer.forEach(r => T.push({ k: 'r' + r.id, ic: 'userx', bg: 'rgba(226,87,76,.14)', st: '#ff8a80', t: r.client + ' n’a pas renouvelé', s: `expiré le ${dt(r.expiration)} · ${r.compte.split('@')[0]} place ${r.place}`, b: `<div class="row" style="gap:6px"><a class="btn sm wa" href="${r.wa}" target="_blank" rel="noopener">Rappel</a><button class="btn sm redo" onclick="mLiberer('${r.id}',this)">Retirer</button></div>` }));
+  if (g.aPreparer.length > 3) T.push({ k: 'pp', ic: 'key', bg: 'rgba(232,163,61,.14)', st: '#f0b65a', t: g.aPreparer.length + ' places à préparer', s: 'profil + code à saisir (sans urgence)', b: `<button class="btn sm sec" onclick="mAPreparer()">Voir</button>` });
+  else g.aPreparer.forEach(p => T.push({ k: 'p' + p.id, ic: 'key', bg: 'rgba(232,163,61,.14)', st: '#f0b65a', t: 'Préparer la place ' + p.n, s: `${p.compte} · nouveau profil + code`, b: `<button class="btn sm sec" onclick="mPreparer('${p.id}')">Préparer</button>` }));
+  g.comptes.forEach(c => T.push({ k: 'c' + c.id, ic: 'card', bg: c.jours <= -2 ? 'rgba(226,87,76,.14)' : 'rgba(232,163,61,.14)', st: c.jours <= -2 ? '#ff8a80' : '#f0b65a', t: (c.jours <= -2 ? 'Compte expiré : ' : 'Payer ') + c.mail.split('@')[0], s: c.jours <= -2 ? `${c.clients} client(s) dessus · ne fonctionne plus ?` : `${c.jours < 0 ? 'expiré ' : 'expire '}${jours(c.jours)}${c.carte ? ' · ' + c.carte : ''}`,
+    b: c.jours <= -2 ? `<div class="row" style="gap:6px"><button class="btn sm" onclick="mPayer('${c.id}',this)">Payé</button><button class="btn sm redo" onclick="mBloquer('${c.id}')">Déplacer</button></div>` : `<button class="btn sm" onclick="mPayer('${c.id}',this)">Payé</button>` }));
+  (g.dettes || []).length && T.push({ k: 'd', ic: 'clock', bg: 'rgba(232,163,61,.14)', st: '#f0b65a', t: g.dettes.length + ' client(s) te doivent', s: g.dettes.reduce((t, b) => t + b.mois, 0) + ' mois au total', b: `<button class="btn sm sec" onclick="mDettes()">Relancer</button>` });
   const rel = g.expirent.concat(g.grace);
   rel.length && T.push({ k: 'x', ic: 'wa', bg: 'rgba(37,211,102,.12)', st: '#5ee08f', t: 'Relancer ' + rel.length + ' client(s)', s: g.grace.length ? g.grace.length + ' en délai de grâce' : 'expirent sous 3 jours', b: `<button class="btn sm sec" onclick="mRelancerExpirants()">Relancer</button>` });
   g.enAttente.forEach(a => T.push({ k: 'a' + a.id, ic: 'clock', bg: 'rgba(143,180,255,.12)', st: '#8fb4ff', t: a.client + ' attend une place', s: a.type, b: `<button class="btn sm ghost" onclick="mAnnulerAttente('${a.id}')">Annuler</button>` }));
+  const aComp = comptesACompleter();
+  if (aComp.length) x += `<button class="card tap anim" style="width:100%;margin-top:12px;text-align:left;color:inherit;cursor:pointer;border-color:var(--g)" onclick="CSKIP=[];push('completer')"><div class="sb"><b style="font-size:14.5px;color:var(--g3)">Compléter mes comptes</b><span class="tag">${aComp.length} à compléter</span></div><div class="mu" style="margin-top:6px">Date de paiement, carte et mot de passe manquants · environ 30 s par compte</div></button>`;
+  if (g.inventaire) {
+    const tot = D.abos.filter(a => a.imp).length, fait = tot - g.inventaire;
+    x += `<button class="card tap anim" style="width:100%;margin-top:12px;text-align:left;color:inherit;cursor:pointer;border-color:rgba(143,180,255,.4)" onclick="push('inventaire')"><div class="sb"><b style="font-size:14.5px">Inventaire de tes anciens clients</b><span class="tag t-bl">${g.inventaire} à vérifier</span></div><div class="bar" style="margin-top:10px"><i data-w="${tot ? fait / tot * 100 : 0}%" style="background:#8fb4ff"></i></div><div class="mu" style="margin-top:6px">${fait} sur ${tot} vérifiés · touche pour continuer</div></button>`;
+  }
+  const autos = D.ventes.filter(v => v.auto && v.statut === 'Validée' && Date.now() - new Date(v.valideeLe).getTime() < 864e5);
+  if (autos.length) x += `<h2>Renouvelés automatiquement</h2>` + autos.map(v => { const c = IX.cl[v.client] || {}, se = IX.se[v.session]; return `<div class="task anim"><div class="ico" style="background:rgba(79,191,131,.12)">${I('check', '#7fd6a3')}</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(c.nom || '')}</div><div class="mu">${esc(se ? se.libelle : v.session)} · ${M(v.prix)}</div></div><button class="btn sm ghost" onclick="annulerVenteAuto('${v.id}','${esc(c.nom || '')}')">Annuler</button></div>`; }).join('');
   x += `<div class="sb" style="margin:22px 0 10px"><span class="serif" style="color:var(--g2);font-size:16px;letter-spacing:1px">À faire aujourd'hui</span><span class="mu">${T.length} tâche(s)</span></div>`;
   x += T.length ? T.map((t, i) => `<div class="task anim" style="animation-delay:${.15 + i * .05}s"><div class="ico" style="background:${t.bg}">${I(t.ic, t.st)}</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(t.t)}</div><div class="mu" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(t.s)}</div></div>${t.b}</div>`).join('')
     : `<div class="card anim" style="text-align:center;border-color:rgba(79,191,131,.35)"><div style="color:var(--ok);font-weight:600">Tout est en ordre</div><div class="mu" style="margin-top:4px">Rien à faire pour le moment.</div></div>`;
@@ -389,15 +411,37 @@ SCREENS.valider = function () {
   if (!D.aValider.length) return `${head('À valider')}<div class="wrap"><div class="empty" style="padding-top:80px"><div style="color:var(--ok);font-weight:600;font-size:16px">Tout est validé</div><div style="margin-top:6px">Aucun paiement en attente.</div><button class="btn sec" style="margin-top:20px" onclick="back()">Retour</button></div></div>`;
   const v = D.aValider[0], n = D.aValider.length;
   const cands = v.candidats.length ? v.candidats : D.sessions.map(s => s.code);
-  const sel = VSEL[v.id] || (VSEL[v.id] = { session: v.preselection || (cands.length === 1 ? cands[0] : ''), clientId: v.clientId, nom: v.nom || '' });
+  const sel = VSEL[v.id] || (VSEL[v.id] = { session: v.preselection || (cands.length === 1 ? cands[0] : ''), clientId: v.clientId, nom: v.nom || '', mode: 'prolonger', aboId: '', nouvelle: false, multi: false });
   const cl = sel.clientId ? IX.cl[sel.clientId] : null;
-  const s = IX.se[sel.session];
+  const codes = sel.session ? sel.session.split('+') : [];
+  const s = IX.se[codes[0]];
+  const prixTot = codes.reduce((t, c) => t + (IX.se[c] ? IX.se[c].prix : 0), 0);
+  const dup = codes.length > 1 && codes[0] === codes[1];
+  const encs = cl && s ? D.abos.filter(a => a.client === cl.id && a.type === s.type && EC.includes(a.statut)) : [];
+  if (encs.length === 1 && !sel.aboId && !sel.nouvelle) sel.aboId = encs[0].id;
+  if (sel.aboId && !encs.find(a => a.id === sel.aboId)) sel.aboId = encs.length === 1 ? encs[0].id : '';
+  const besoinChoix = encs.length > 1 && !sel.aboId && !sel.nouvelle;
   let info = '';
-  if (s && cl) {
-    const enc = D.abos.find(a => a.client === cl.id && a.type === s.type && ['Actif', 'Grâce', 'À retirer', 'En attente'].includes(a.statut));
-    if (enc) { const cp = IX.cp[enc.compte], pl = IX.pl[enc.place]; info = `<b style="color:var(--ok)">Renouvellement · place conservée</b><br><span class="mu">${cp ? esc(cp.mail) + ' · place ' + (pl ? pl.n : '') : 'en attente de place'} · jusqu'au ${dt(enc.expiration)} + ${s.duree} mois</span>`; }
+  if (s) {
+    if (dup) info = sel.mode === 'place' ? `<b style="color:var(--g3)">${encs.length ? 'Renouvellement + 2e place' : '2 places'}</b><br><span class="mu">${encs.length ? 'Sa place actuelle est prolongée, et une nouvelle place est attribuée pour un proche.' : 'Deux places « ' + esc(s.type) + ' » seront attribuées.'}</span>`
+      : `<b style="color:var(--ok)">${encs.length ? 'Renouvellement de ' + (s.duree * 2) + ' mois' : 'Nouveau · ' + (s.duree * 2) + ' mois'}</b>`;
+    else if (sel.nouvelle) info = `<b style="color:var(--g3)">Nouvelle place</b><br><span class="mu">Une 2e place « ${esc(s.type)} » sera attribuée (pour un proche, avec son propre profil).</span>`;
+    else if (sel.aboId) { const e = IX.ab[sel.aboId], cp = IX.cp[e.compte], pl = IX.pl[e.place]; info = `<b style="color:var(--ok)">Renouvellement · place conservée</b><br><span class="mu">${cp ? esc(cp.mail) + ' · place ' + (pl ? pl.n : '') : 'en attente de place'} · jusqu'au ${dt(e.expiration)} + ${s.duree} mois${e.statut === 'Dette' ? ' · paie une partie de sa dette' : ''}</span>`; }
+    else if (!besoinChoix) info = `<b style="color:var(--g3)">${cl ? 'Client de retour' : 'Nouveau client'}</b><br><span class="mu">Une place « ${esc(s.type)} » sera attribuée automatiquement.</span>`;
+    if (codes.length > 1 && !dup) info += `<br><span class="mu">+ ${esc(IX.se[codes[1]] ? IX.se[codes[1]].libelle : '')} : 2e abonnement créé ou prolongé automatiquement.</span>`;
   }
-  if (s && !info) info = `<b style="color:var(--g3)">${cl ? 'Client de retour' : 'Nouveau client'}</b><br><span class="mu">Une place « ${esc(s.type)} » sera attribuée automatiquement.</span>`;
+  const lib = c => c.split('+').map(x => IX.se[x] ? IX.se[x].libelle.replace(IX.se[x].type + ' · ', '') + (c.includes('+') ? ' (' + IX.se[x].type.split(' ')[0] + ')' : '') : x).join(' + ');
+  const chip = (c, on, act) => { const parts = c.split('+'), x = IX.se[parts[0]]; if (!x) return ''; const p = parts.reduce((t, y) => t + (IX.se[y] ? IX.se[y].prix : 0), 0);
+    return `<button class="tap" style="text-align:left;border-radius:14px;padding:12px;cursor:pointer;${on ? 'background:rgba(212,175,55,.12);border:1.5px solid var(--g);color:var(--g3)' : 'background:transparent;border:1px solid #2f2f2f;color:#d6d6d6'};font:600 13px Montserrat,sans-serif;${parts.length > 1 ? 'grid-column:1/-1' : ''}" onclick="${act}">${esc(lib(c))}<span style="display:block;font-weight:400;font-size:12px;opacity:.75;margin-top:2px">${parts.length > 1 ? 'Plusieurs sessions' : esc(x.type)} · ${MASK ? '•••' : F(p)}</span></button>`; };
+  window._vs = (id, c) => { const z = VSEL[id]; z.session = c; z.aboId = ''; z.nouvelle = false; renderOverlay(); };
+  window._vm = (id, c) => { const z = VSEL[id]; const l = z.session ? z.session.split('+') : []; const i = l.indexOf(c); if (i >= 0) l.splice(i, 1); else l.push(c); z.session = l.slice(0, 3).join('+'); z.aboId = ''; z.nouvelle = false; renderOverlay(); };
+  const sessionsHtml = sel.multi
+    ? `<div class="grid2">${D.sessions.map(x => chip(x.code, codes.includes(x.code), `_vm('${v.id}','${x.code}')`)).join('')}</div><button class="btn sm ghost" style="margin-top:8px" onclick="VSEL['${v.id}'].multi=false;renderOverlay()">Revenir aux suggestions</button>`
+    : `<div class="grid2">${cands.map(c => chip(c, sel.session === c, `_vs('${v.id}','${c}')`)).join('')}</div><button class="btn sm ghost" style="margin-top:8px" onclick="VSEL['${v.id}'].multi=true;renderOverlay()">Plusieurs sessions ou autre session</button>`;
+  const choixHtml = dup ? `<div class="mu" style="margin:14px 0 8px">Deux fois la même session :</div><div class="seg"><button class="${sel.mode !== 'place' ? 'on' : ''}" onclick="VSEL['${v.id}'].mode='prolonger';renderOverlay()">Prolonger ${s.duree * 2} mois</button><button class="${sel.mode === 'place' ? 'on' : ''}" onclick="VSEL['${v.id}'].mode='place';renderOverlay()">Ajouter une 2e place</button></div>`
+    : (encs.length ? `<div class="mu" style="margin:14px 0 8px">${encs.length > 1 ? 'Ce client a plusieurs places : laquelle prolonger ?' : 'Que faire ?'}</div>
+      ${encs.map(e => { const cp = IX.cp[e.compte], pl = IX.pl[e.place], on = sel.aboId === e.id && !sel.nouvelle; return `<button class="tap row" style="width:100%;text-align:left;border-radius:14px;padding:10px 12px;margin-bottom:6px;cursor:pointer;${on ? 'background:rgba(212,175,55,.12);border:1.5px solid var(--g);color:var(--g3)' : 'background:transparent;border:1px solid #2f2f2f;color:#d6d6d6'};font:13px Montserrat,sans-serif" onclick="VSEL['${v.id}'].aboId='${e.id}';VSEL['${v.id}'].nouvelle=false;renderOverlay()"><span style="flex:1">Prolonger · ${cp ? esc(cp.mail.split('@')[0]) + ' place ' + (pl ? pl.n : '?') : 'en attente'} · jusqu'au ${dt(e.expiration)}</span>${e.statut === 'Dette' ? '<span class="tag t-wa">Dette</span>' : ''}</button>`; }).join('')}
+      <button class="tap" style="width:100%;text-align:left;border-radius:14px;padding:10px 12px;cursor:pointer;${sel.nouvelle ? 'background:rgba(212,175,55,.12);border:1.5px solid var(--g);color:var(--g3)' : 'background:transparent;border:1px dashed #3a3a3a;color:#d6d6d6'};font:13px Montserrat,sans-serif" onclick="VSEL['${v.id}'].nouvelle=true;VSEL['${v.id}'].aboId='';renderOverlay()">＋ Ajouter une nouvelle place (pour un proche)</button>` : '');
   const sugg = (v.suggestions || []).map(id => IX.cl[id]).filter(Boolean);
   const actifs = D.clients.filter(c => c.statut !== 'Supprimé').sort((a, b) => a.nom.localeCompare(b.nom));
   return `${head('À valider', `1 sur ${n} · reçu le ${dt(v.date)}`)}
@@ -406,7 +450,7 @@ SCREENS.valider = function () {
   <div class="anim" style="margin-top:16px;border-radius:26px;background:linear-gradient(170deg,#1d1708 0%,#111 45%);border:1px solid var(--lg);padding:20px;box-shadow:0 20px 50px rgba(0,0,0,.6)">
     <div class="sb"><span style="font-size:12px;color:#c9b77a;letter-spacing:1px">ORANGE MONEY</span><span class="mu">${esc(v.numero)}</span></div>
     <div class="big" style="font-size:44px;margin:8px 0 2px">${M(v.montant)}</div>
-    ${s && v.montant > s.prix && !MASK ? `<div class="mu">dont ${F(v.montant - s.prix)} de frais ajoutés par le client</div>` : ''}
+    ${s && v.montant > prixTot && !MASK ? `<div class="mu">dont ${F(v.montant - prixTot)} de frais ajoutés par le client</div>` : ''}
     ${!v.candidats.length ? `<div style="margin-top:8px;font-size:13px;color:var(--wa)">Ce montant ne correspond à aucune session. Choisis-la ou ignore ce paiement.</div>` : ''}
     <div class="row" style="margin-top:18px;padding:12px;background:#0b0b0b;border-radius:16px;border:1px solid var(--ln)">
       <div class="av ${cl ? 'g' : ''}">${esc(ini(cl ? cl.nom : (sel.nom || v.nom)))}</div>
@@ -421,11 +465,11 @@ SCREENS.valider = function () {
     </select>
     ${!sel.clientId ? `<label class="l">Nom du nouveau client</label><input value="${esc(sel.nom)}" oninput="VSEL['${v.id}'].nom=this.value"><label class="l">Numéro WhatsApp (si différent de ${esc(v.numero)})</label><input inputmode="tel" placeholder="Facultatif" value="${esc(sel.wa || '')}" oninput="VSEL['${v.id}'].wa=this.value">` : ''}
     <div class="mu" style="margin:4px 0 8px">Quelle session ?</div>
-    <div class="grid2">${cands.map(c => { const x = IX.se[c]; if (!x) return ''; const on = sel.session === c;
-      return `<button class="tap" style="text-align:left;border-radius:14px;padding:12px;cursor:pointer;${on ? 'background:rgba(212,175,55,.12);border:1.5px solid var(--g);color:var(--g3)' : 'background:transparent;border:1px solid #2f2f2f;color:#d6d6d6'};font:600 13.5px Montserrat,sans-serif" onclick="VSEL['${v.id}'].session='${c}';renderOverlay()">${esc(x.libelle.replace(x.type + ' · ', ''))}<span style="display:block;font-weight:400;font-size:12px;opacity:.75;margin-top:2px">${esc(x.type)} · ${MASK ? '•••' : F(x.prix)}</span></button>`; }).join('')}</div>
+    ${sessionsHtml}
+    ${choixHtml}
     ${info ? `<div style="margin-top:14px;padding:12px 14px;border-radius:14px;background:rgba(79,191,131,.06);border:1px solid rgba(79,191,131,.22);font-size:13px;line-height:1.45">${info}</div>` : ''}
   </div>
-  <div style="margin-top:18px">${sel.session ? `<div class="swipe" id="sw"><div class="fill"></div><div class="knob">${I('arrow', '#111').replace('<svg', '<svg width="22" height="22"')}</div><span class="lbl">Glisser pour valider</span></div>` : `<div class="mu" style="text-align:center;padding:20px">Choisis la session pour valider.</div>`}</div>
+  <div style="margin-top:18px">${sel.session && !besoinChoix ? `<div class="swipe" id="sw"><div class="fill"></div><div class="knob">${I('arrow', '#111').replace('<svg', '<svg width="22" height="22"')}</div><span class="lbl">Glisser pour valider</span></div>` : `<div class="mu" style="text-align:center;padding:20px">${besoinChoix ? 'Choisis la place à prolonger.' : 'Choisis la session pour valider.'}</div>`}</div>
   <div class="grid2" style="margin-top:10px"><button class="btn ghost" onclick="ignorerVente('${v.id}')">Ignorer</button><button class="btn ghost" onclick="back()">Plus tard</button></div>
   </div>`;
 };
@@ -447,9 +491,10 @@ async function validerCourant() {
   const v = D.aValider[0], sel = VSEL[v.id];
   try {
     busy(true);
-    const r = await call('valider', { venteId: v.id, session: sel.session, clientId: sel.clientId || '', nom: sel.nom, whatsapp: sel.wa || '' });
+    const codes = sel.session.split('+'), dup = codes.length > 1 && codes[0] === codes[1];
+    const r = await call('valider', { venteId: v.id, session: sel.session, clientId: sel.clientId || '', nom: sel.nom, whatsapp: sel.wa || '',
+      mode: dup ? sel.mode : (sel.nouvelle ? 'place' : ''), aboId: sel.nouvelle ? '' : (sel.aboId || ''), nouvellePlace: !!sel.nouvelle });
     busy(false);
-    D.aValider.shift();
     STACK[STACK.length - 1] = { name: 'succes', args: [r, v.id] };
     renderOverlay(true);
     undoToast('Vente enregistrée', () => call('annulerVente', { venteId: v.id }));
@@ -458,14 +503,14 @@ async function validerCourant() {
 }
 function ignorerVente(id) {
   confirmer({ titre: 'Ignorer ce paiement ?', texte: 'Il ne sera pas compté dans tes ventes (par exemple un transfert personnel).', ok: 'Ignorer', icon: 'ban',
-    action: async () => { try { busy(true); await call('ignorer', { venteId: id }); busy(false); D.aValider.shift(); renderOverlay(); undoToast('Paiement ignoré', () => call('reprendreVente', { venteId: id })); refresh(true); } catch (e) { busy(false); toast(String(e), true); } } });
+    action: async () => { try { busy(true); await call('ignorer', { venteId: id }); busy(false); renderOverlay(); undoToast('Paiement ignoré', () => call('reprendreVente', { venteId: id })); refresh(true); } catch (e) { busy(false); toast(String(e), true); } } });
 }
 const sparks = () => [[-30, -20], [70, -10], [-18, 70], [60, 64], [10, -40], [-40, 30]].map(([x, y], i) => `<span class="sp" style="left:56px;top:56px;--x:${x}px;--y:${y}px;animation-delay:${.5 + i * .05}s"></span>`).join('');
 SCREENS.succes = function (r) {
   const reste = D.aValider.length;
   return `<div style="min-height:100%;background:radial-gradient(circle at 50% 22%,#2a210a 0%,#070707 50%);padding:calc(70px + var(--top)) 20px calc(40px + var(--bot))">
     <div class="check"><div class="ring"></div><svg width="120" height="120" viewBox="0 0 120 120" aria-hidden="true" style="position:absolute;inset:0"><path d="M38 62l15 15 30-34" fill="none" stroke="#f6e3a8" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>${sparks()}</div>
-    <div class="serif anim" style="text-align:center;font-size:24px;color:var(--g2);margin-top:26px;animation-delay:.3s">${{ Nouveau: 'Nouveau client', Retour: 'Client de retour', Renouvellement: 'Renouvellement' }[r.genre] || 'Vente validée'}</div>
+    <div class="serif anim" style="text-align:center;font-size:24px;color:var(--g2);margin-top:26px;animation-delay:.3s">${{ Nouveau: 'Nouveau client', Retour: 'Client de retour', Renouvellement: 'Renouvellement', 'Nouvelle place': 'Nouvelle place' }[r.genre] || 'Vente validée'}</div>
     <div class="anim" style="text-align:center;color:var(--mu);margin-top:6px;animation-delay:.35s">${esc(r.client)} · ${esc(r.session)}</div>
     <div class="card gold anim" style="margin-top:24px;animation-delay:.4s">
       <div style="font-size:12px;color:#c9b77a;letter-spacing:1px">${r.acces ? (r.genre === 'Renouvellement' ? 'PLACE CONSERVÉE' : 'PLACE ATTRIBUÉE') : 'EN ATTENTE DE PLACE'}</div>
@@ -474,6 +519,7 @@ SCREENS.succes = function (r) {
       ${r.acces ? `<div class="acces" style="margin-top:12px"><div>Mail : ${esc(r.acces.mail)}</div><div>Mot de passe : ${esc(r.acces.mdp)}</div><div>Profil : <b>${esc(r.acces.profil)}</b></div><div>Code : <b>${esc(r.acces.code)}</b></div></div>` : ''}
     </div>
     ${r.whatsapp ? `<a class="btn wa full anim" style="margin-top:16px;animation-delay:.45s" href="${r.whatsapp}" target="_blank" rel="noopener">${r.genre === 'Renouvellement' ? 'Envoyer la confirmation sur WhatsApp' : 'Envoyer les accès sur WhatsApp'}</a>` : ''}
+    ${(r.autres || []).map(o => `<div class="card gold anim" style="margin-top:12px;animation-delay:.5s"><div style="font-size:12px;color:#c9b77a;letter-spacing:1px">${esc(o.genre === 'Renouvellement' ? 'AUSSI PROLONGÉ' : 'AUSSI ATTRIBUÉ')} · ${esc(o.session)}</div><div style="font-size:14px;margin-top:6px">${esc(o.info)}</div>${o.acces ? `<div class="acces" style="margin-top:10px"><div>Mail : ${esc(o.acces.mail)}</div><div>Mot de passe : ${esc(o.acces.mdp)}</div><div>Profil : <b>${esc(o.acces.profil)}</b> · Code : <b>${esc(o.acces.code)}</b></div></div>` : ''}${o.whatsapp ? `<a class="btn wa sm" style="margin-top:10px" href="${o.whatsapp}" target="_blank" rel="noopener">Envoyer sur WhatsApp</a>` : ''}</div>`).join('')}
     <button class="btn ${reste ? '' : 'ghost'} full anim" style="margin-top:10px;animation-delay:.5s" onclick="${reste ? "STACK[STACK.length-1]={name:'valider'};renderOverlay(true)" : 'back()'}">${reste ? `Paiement suivant (${reste})` : 'Terminer'}</button>
   </div>`;
 };
@@ -529,6 +575,298 @@ function mAnnulerAttente(aboId) {
   $('#aa_g').onclick = () => { closeSheet(); act('annulerAttente', { aboId }, 'Attente annulée'); };
 }
 
+function annulerVenteAuto(id, nom) {
+  confirmer({ titre: 'Annuler ce renouvellement ?', texte: 'Le renouvellement de ' + nom + ' sera annulé : sa date d’expiration revient comme avant et le paiement est retiré de tes gains.', ok: 'Annuler le renouvellement', danger: true, icon: 'back2',
+    action: () => act('annulerVente', { venteId: id }, 'Renouvellement annulé') });
+}
+function mAPreparer() {
+  const par = {}; D.digest.aPreparer.forEach(p => (par[p.compte] = par[p.compte] || []).push(p));
+  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Places à préparer</div><div class="mu" style="margin:4px 0 10px">Saisis le profil et le code quand tu les connais. Ces places ne sont pas attribuées tant qu'elles ne sont pas prêtes.</div>
+    ${Object.keys(par).map(c => `<div style="margin-top:12px;font-weight:600;font-size:13px;color:var(--g2)">${esc(c)}</div>` + par[c].map(p => `<div class="list-item"><div style="flex:1">Place ${p.n}<div class="mu">depuis ${p.jours} j</div></div><button class="btn sm sec" onclick="closeSheet();mPreparer('${p.id}')">Préparer</button></div>`).join('')).join('')}`);
+}
+function mExpires() {
+  const l = D.digest.aRetirer.slice().sort((a, b) => b.jours - a.jours);
+  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Expirés non payés</div><div class="mu" style="margin:4px 0 10px">Envoie d'abord un <b>rappel</b>. S'il ne paie pas, touche <b>Retirer</b>. S'il paie, son paiement sera reconnu et il gardera sa place.</div>
+    ${l.map(b => `<div class="list-item"><div class="av">${esc(ini(b.client))}</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(b.client)}</div><div class="mu">expiré le ${dt(b.expiration)} · ${esc(b.compte.split('@')[0])} place ${b.place}</div></div><div class="row" style="gap:6px"><a class="btn sm wa" href="${b.wa}" target="_blank" rel="noopener">Rappel</a><button class="btn sm redo" onclick="closeSheet();mLiberer('${b.id}')">Retirer</button></div></div>`).join('')}`);
+}
+function mDettes() {
+  const l = D.digest.dettes;
+  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Ils te doivent</div><div class="mu" style="margin:4px 0 10px">Un message WhatsApp prêt pour chacun.</div>
+    ${l.map(b => `<div class="list-item"><div class="av">${esc(ini(b.client))}</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(b.client)}</div><div class="mu">${b.mois} mois · depuis le ${dt(b.expiration)} · ${esc((b.compte || '').split('@')[0])}</div></div><a class="btn sm wa" href="${b.wa}" target="_blank" rel="noopener">Relancer</a></div>`).join('')}`);
+}
+
+/* ═════════ COMPLÉTER MES COMPTES ═════════ */
+let CSKIP = [];
+function manques(c) {
+  const prep = D.places.filter(p => p.compte === c.id && p.etat === 'À préparer');
+  const m = [];
+  if (!c.expiration) m.push('date de paiement');
+  if (!c.carte) m.push('carte');
+  if (!c.mdp) m.push('mot de passe');
+  return { m, prep };
+}
+function comptesACompleter() { return D.comptes.filter(c => c.statut === 'Actif' && manques(c).m.length); }
+SCREENS.completer = function () {
+  const l = comptesACompleter(), tot = D.comptes.filter(c => c.statut === 'Actif').length;
+  const reste = l.filter(c => !CSKIP.includes(c.id)).concat(l.filter(c => CSKIP.includes(c.id)));
+  if (!reste.length) return `${head('Compléter mes comptes')}<div class="wrap"><div class="empty" style="padding-top:70px"><div class="serif" style="color:var(--g2);font-size:20px">Tous tes comptes sont complets ✨</div><button class="btn sec" style="margin-top:20px" onclick="back()">Retour</button></div></div>`;
+  const c = reste[0], { m, prep } = manques(c), occ = D.places.filter(p => p.compte === c.id && p.etat === 'Occupée');
+  return `${head('Compléter mes comptes', `${tot - l.length + 1} sur ${tot} · il reste ${l.length} compte(s)`)}
+  <div style="padding:0 20px calc(40px + var(--bot))">
+  <div class="bar" style="margin-top:14px"><i data-w="${(tot - l.length) / tot * 100}%"></i></div>
+  <div class="card gold anim" style="margin-top:16px">
+    <div class="sb"><b style="font-size:16px;word-break:break-all">${esc(c.mail)}</b>${tagStat(c.type.split(' ')[0])}</div>
+    <div class="mu" style="margin-top:4px">Il manque : ${esc(m.join(', '))}${prep.length ? ' · ' + prep.length + ' place(s) sans profil (facultatif)' : ''}</div>
+    <hr>
+    <label class="l">Date de la prochaine échéance (paiement de ta carte)</label><input id="cc_exp" type="date" value="${isoDay(c.expiration)}">
+    <label class="l">Carte</label><select id="cc_carte">${carteOptions(c.carte, c.id)}</select>
+    <label class="l">Mot de passe du compte</label><input id="cc_mdp" autocapitalize="off" value="${esc(c.mdp)}">
+    ${prep.length ? `<div class="mu" style="margin:6px 0 8px">Profils et codes des places vides (laisse vide si tu ne sais pas)</div>
+    ${prep.sort((a, b) => a.n - b.n).map(p => `<div class="row" style="gap:8px"><span class="mu" style="width:56px">Place ${p.n}</span><input class="cc_p" data-id="${p.id}" placeholder="Profil" style="margin:4px 0" value="${esc(p.profil)}"><input class="cc_c" data-id="${p.id}" placeholder="Code" inputmode="numeric" style="margin:4px 0;width:90px" value="${esc(p.code)}"></div>`).join('')}` : ''}
+    ${occ.length ? `<details style="margin-top:10px"><summary>Déjà sur ce compte (${occ.length})</summary>${occ.map(p => `<div class="mu" style="padding:4px 0">Place ${p.n} · ${esc((IX.cl[p.client] || {}).nom || '')} · ${esc(p.profil || '—')}</div>`).join('')}</details>` : ''}
+  </div>
+  <button class="btn full" style="margin-top:16px" onclick="sauverCompte('${c.id}')">Enregistrer et suivant</button>
+  <button class="btn ghost full" style="margin-top:8px" onclick="CSKIP.push('${c.id}');renderOverlay(true)">Passer ce compte</button>
+  </div>`;
+};
+async function sauverCompte(id) {
+  const places = [...document.querySelectorAll('.cc_p')].map(i => ({ placeId: i.dataset.id, profil: i.value, code: document.querySelector(`.cc_c[data-id="${i.dataset.id}"]`).value }));
+  const d = { id, expiration: $('#cc_exp').value, carte: $('#cc_carte').value, mdp: $('#cc_mdp').value, places };
+  try { busy(true); const r = await call('completerCompte', d); busy(false); CSKIP.push(id); toast('Compte enregistré' + (r && r.places ? ' · ' + r.places + ' place(s) prête(s)' : '')); renderOverlay(true); }
+  catch (e) { busy(false); toast(String(e), true); }
+}
+
+/* ═════════ RECHERCHE ═════════ */
+let RQ = '';
+SCREENS.recherche = function () {
+  setTimeout(() => { const i = $('#rq'); if (i && document.activeElement !== i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 80);
+  return `${head('Rechercher')}<div style="padding:12px 20px calc(40px + var(--bot))">
+  <input id="rq" placeholder="Nom, numéro, mail, carte, profil…" value="${esc(RQ)}" oninput="RQ=this.value;$('#rq_res').innerHTML=resultats()" autocomplete="off">
+  <div id="rq_res">${resultats()}</div></div>`;
+};
+function resultats() {
+  const q = RQ.trim().toLowerCase(), qn = q.replace(/\s/g, '');
+  if (q.length < 2) return '<div class="empty">Tape au moins 2 lettres ou chiffres.</div>';
+  const has = v => String(v || '').toLowerCase().includes(q) || (qn.length >= 3 && String(v || '').replace(/\s/g, '').includes(qn));
+  const cl = D.clients.filter(c => c.statut !== 'Supprimé' && (has(c.nom) || c.numeros.some(has) || has(c.whatsapp))).slice(0, 20);
+  const cp = D.comptes.filter(c => has(c.mail) || has(c.nom) || has(c.tel)).slice(0, 10);
+  const ca = D.cartes.filter(c => c.statut !== 'Supprimée' && (has(c.repere) || has(c.titulaire))).slice(0, 10);
+  const pl = D.places.filter(p => p.etat === 'Occupée' && (has(p.profil) || has(p.code)) && p.client).slice(0, 10);
+  const it = (ic, t, s, f) => `<button class="tap list-item" style="width:100%;background:none;border:0;border-top:1px solid #1d1d1d;color:inherit;text-align:left;cursor:pointer" onclick="${f}"><div class="ico" style="background:rgba(212,175,55,.1)">${I(ic, '#f6e3a8')}</div><div style="flex:1;min-width:0"><div style="font-weight:600">${esc(t)}</div><div class="mu" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s)}</div></div></button>`;
+  let h = '';
+  if (cl.length) h += '<h2>Clients</h2>' + cl.map(c => { const a = D.abos.filter(x => x.client === c.id && EC.includes(x.statut)); return it('users', c.nom, (c.numeros.join(' · ') || 'sans numéro') + (a.length ? ' · ' + a.map(x => x.statut).join(', ') : ''), `push('client',['${c.id}'])`); }).join('');
+  if (pl.length) h += '<h2>Profils</h2>' + pl.map(p => it('key', (IX.cl[p.client] || {}).nom || '', `profil ${p.profil} · code ${p.code} · ${(IX.cp[p.compte] || {}).mail || ''}`, `push('client',['${p.client}'])`)).join('');
+  if (cp.length) h += '<h2>Comptes</h2>' + cp.map(c => it('box', c.mail, c.type + ' · ' + c.statut, c.statut === 'Actif' ? `push('compte',['${c.id}'])` : "toast('Compte ' + '${c.statut}'.toLowerCase())")).join('');
+  if (ca.length) h += '<h2>Cartes</h2>' + ca.map(c => it('card', c.repere, (c.titulaire || '') + ' · ' + D.comptes.filter(x => x.statut === 'Actif' && x.carte === c.id).length + ' compte(s)', "STACK=[];renderOverlay();CSEG='cartes';go('comptes')")).join('');
+  return h || '<div class="empty">Aucun résultat.</div>';
+}
+
+/* ═════════ INVENTAIRE ═════════ */
+let INV = { skip: [], sel: {} };
+SCREENS.inventaire = function (premier) {
+  let l = D.abos.filter(a => a.statut === 'Inventaire');
+  if (premier) { const i = l.findIndex(a => a.id === premier); if (i > 0) l.unshift(l.splice(i, 1)[0]); }
+  l = l.filter(a => !INV.skip.includes(a.id)).concat(l.filter(a => INV.skip.includes(a.id)));
+  const tot = D.abos.filter(a => a.imp).length;
+  if (!l.length) return `${head('Inventaire')}<div class="wrap"><div class="empty" style="padding-top:70px"><div class="check" style="width:90px;height:90px"><div class="ring"></div></div><div class="serif" style="color:var(--g2);font-size:20px;margin-top:20px">Inventaire terminé</div><div style="margin-top:6px">Tous tes anciens clients sont vérifiés.</div><button class="btn sec" style="margin-top:20px" onclick="back()">Retour</button></div></div>`;
+  const a = l[0], c = IX.cl[a.client] || {}, im = a.imp || {}, cp = IX.cp[im.compte] || {};
+  const sel = INV.sel[a.id] || (INV.sel[a.id] = { date: isoDay(a.debut), duree: im.duree || 1 });
+  const autres = D.abos.filter(x => x.client === a.client && x.id !== a.id);
+  const exp = sel.date ? (() => { const d = new Date(sel.date); d.setUTCMonth(d.getUTCMonth() + Number(sel.duree)); return d.toISOString(); })() : null;
+  const dexp = exp ? daysTo(exp) : null;
+  return `${head('Inventaire', `${tot - l.length + 1} sur ${tot} · vérifie chaque client`)}
+  <div style="padding:0 20px calc(40px + var(--bot))">
+  <button class="card tap" style="width:100%;margin-top:14px;text-align:left;color:inherit;cursor:pointer;border-color:var(--g)" onclick="toutAccepter()"><div class="sb"><b style="color:var(--g3)">Tout accepter selon mes notes</b>${I('arrow', '#f6e3a8').replace('<svg', '<svg width="18" height="18"')}</div><div class="mu" style="margin-top:4px">${l.length} clients d'un coup : ❌ → « Me doit », sinon « À jour » avec la date notée.</div></button>
+  <div class="bar" style="margin-top:14px"><i data-w="${(tot - l.length) / tot * 100}%" style="background:#8fb4ff"></i></div>
+  <div class="anim" style="margin-top:16px;border-radius:24px;background:linear-gradient(170deg,#141a24 0%,#111 50%);border:1px solid rgba(143,180,255,.3);padding:18px">
+    <div class="row"><div class="av g">${esc(ini(c.nom))}</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:17px">${esc(c.nom)}</div><div class="mu">${esc(cp.mail || '')}</div></div></div>
+    <div class="grid2" style="margin-top:14px;font-size:13px">
+      <div><div class="mu" style="font-size:11px">Payé le (tes notes)</div>${a.debut ? dt(a.debut) : '<span style="color:var(--wa)">non noté</span>'}</div>
+      <div><div class="mu" style="font-size:11px">Profil · code</div>${esc(im.profil || '—')} · ${esc(im.code || '—')}</div>
+      <div><div class="mu" style="font-size:11px">Mois non payés (❌)</div><span style="color:${im.dus ? 'var(--wa)' : 'var(--tx)'}">${im.dus || 0}</span></div>
+      <div><div class="mu" style="font-size:11px">Durée</div>${im.duree === 12 ? 'Annuel' : (im.duree || 1) + ' mois'}</div>
+    </div>
+    ${im.note || im.tel ? `<div class="mu" style="margin-top:10px">${esc([im.note, im.tel ? 'Tél. ' + im.tel : ''].filter(Boolean).join(' · '))}</div>` : ''}
+    ${autres.length ? `<div class="mu" style="margin-top:8px;color:#8fb4ff">Aussi sur ${autres.length} autre(s) compte(s)</div>` : ''}
+    <hr>
+    <label class="l">Date de son dernier paiement</label><input type="date" value="${sel.date}" onchange="INV.sel['${a.id}'].date=this.value;renderOverlay()">
+    <div class="chips" style="margin-bottom:6px">${[[1, '1 mois'], [2, '2 mois'], [3, '3 mois'], [12, '1 an']].map(([d, t]) => `<button class="chip ${Number(sel.duree) === d ? 'on' : ''}" onclick="INV.sel['${a.id}'].duree=${d};renderOverlay()">${t}</button>`).join('')}</div>
+    ${exp ? `<div class="mu">Expiration : <b style="color:${dexp < 0 ? 'var(--wa)' : 'var(--ok)'}">${dt(exp)}</b> (${jours(dexp)})</div>` : ''}
+  </div>
+  <button class="btn full" style="margin-top:16px" onclick="invAction('${a.id}','ajour')">${I('check', '#111').replace('<svg', '<svg width="18" height="18"')} À jour</button>
+  <div class="grid2" style="margin-top:8px">
+    <button class="btn" style="background:rgba(232,163,61,.15);color:var(--wa);border:1px solid rgba(232,163,61,.5)" onclick="invAction('${a.id}','dette')">Me doit</button>
+    <button class="btn redo" onclick="invAction('${a.id}','parti')">Parti</button>
+  </div>
+  <button class="btn ghost full" style="margin-top:8px;min-height:44px" onclick="INV.skip.push('${a.id}');renderOverlay(true)">Passer pour l'instant</button>
+  <div class="mu" style="margin-top:14px;line-height:1.5"><b>À jour</b> : il a payé, il garde sa place jusqu'à la date d'expiration.<br><b>Me doit</b> : il est encore sur le compte mais n'a pas payé : il apparaît dans « Ils te doivent ».<br><b>Parti</b> : il n'est plus sur le compte : il ira dans « Faire revenir ».</div>
+  </div>`;
+};
+function toutAccepter() {
+  const l = D.abos.filter(a => a.statut === 'Inventaire');
+  confirmer({ titre: 'Tout accepter ?', icon: 'check', ok: 'Tout accepter',
+    texte: `Les <b>${l.length}</b> clients seront placés sur leurs comptes avec les dates de tes notes.<br>• Avec ❌ : « Me doit »<br>• Sans ❌ : « À jour »<br>Ceux dont la date est dépassée apparaîtront ensuite dans tes tâches (à relancer ou à retirer). Tu pourras corriger chaque client dans sa fiche.`,
+    action: async () => { try { busy(true); const r = await call('inventaireAuto'); busy(false); toast(r.faits + ' clients placés' + (r.sansDate ? ' · ' + r.sansDate + ' sans date restent à vérifier' : '')); await refresh(true); renderOverlay(true); } catch (e) { busy(false); toast(String(e), true); } } });
+}
+async function invAction(id, choix) {
+  const sel = INV.sel[id] || {};
+  if (choix !== 'parti' && !sel.date) return toast('Indique la date de son dernier paiement.', true);
+  const c = IX.cl[(IX.ab[id] || {}).client] || {};
+  try {
+    busy(true);
+    await call('inventaire', { aboId: id, choix, date: sel.date, duree: sel.duree });
+    busy(false);
+    const ab = D.abos.find(a => a.id === id); if (ab) ab.statut = choix === 'parti' ? 'Terminé' : 'Actif';
+    renderOverlay(true);
+    undoToast((c.nom || 'Client') + ' : ' + { ajour: 'à jour', dette: 'me doit', parti: 'parti' }[choix], () => call('annulerInventaire', { aboId: id }));
+    refresh(true);
+  } catch (e) { busy(false); toast(String(e), true); }
+}
+
+
+/* ═════════ CONTACTS → WHATSAPP ═════════ */
+// Les contacts restent sur le téléphone (stockage local) : seuls les numéros validés partent dans le tableau.
+let CT = { skip: [], pick: {} };
+const sansWa = () => D.clients.filter(c => c.statut !== 'Supprimé' && !c.whatsapp && !LS.get('wa_non', []).includes(c.id));
+function normN(n) {
+  let x = String(n || '').trim(), plus = x.startsWith('+');
+  x = x.replace(/\D/g, '');
+  if (x.startsWith('00')) { x = x.slice(2); plus = true; }
+  if (x.length > 8 && x.startsWith('226')) return x.slice(3);
+  if (plus || x.length !== 8) return '';   // numéro étranger ou incomplet : ignoré
+  return x;
+}
+function nrm(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z ]/g, ' ').replace(/\s+/g, ' ').trim(); }
+function lev(a, b) {
+  const m = a.length, n = b.length; if (!m || !n) return m || n;
+  let p = Array.from({ length: n + 1 }, (_, j) => j);
+  for (let i = 1; i <= m; i++) { const q = [i]; for (let j = 1; j <= n; j++) q[j] = Math.min(p[j] + 1, q[j - 1] + 1, p[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); p = q; }
+  return p[n];
+}
+function simNom(a, b) {
+  a = nrm(a); b = nrm(b); if (!a || !b) return 0; if (a === b) return 100;
+  const ta = a.split(' ').filter(w => w.length > 1), tb = b.split(' ').filter(w => w.length > 1);
+  if (!ta.length || !tb.length) return 0;
+  const mot = (w, v) => { if (w === v) return 1; if ((v.startsWith(w) || w.startsWith(v)) && Math.min(w.length, v.length) >= 3) return .85;
+    const r = 1 - lev(w, v) / Math.max(w.length, v.length); return r >= .7 ? r : 0; };
+  const cote = (x, y) => x.reduce((s, w) => s + Math.max(...y.map(v => mot(w, v))), 0) / x.length;
+  return Math.round(100 * (.7 * cote(ta, tb) + .3 * cote(tb, ta)));
+}
+function decodeV(key, v) {
+  if (/QUOTED-PRINTABLE/i.test(key)) { try { const by = []; v.replace(/=\r?\n/g, '').replace(/=([0-9A-F]{2})|([^=])/gi, (_, h, c) => { if (h) by.push(parseInt(h, 16)); else by.push(...new TextEncoder().encode(c)); }); v = new TextDecoder().decode(new Uint8Array(by)); } catch (e) {} }
+  return v.replace(/\\([,;\\])/g, '$1').replace(/\\n/gi, ' ').trim();
+}
+function parseVcf(txt) {
+  txt = txt.replace(/\r?\n[ \t]/g, '');
+  const out = []; let cur = null;
+  txt.split(/\r?\n/).forEach(line => {
+    if (/^BEGIN:VCARD/i.test(line)) cur = { nom: '', surnom: '', tels: [] };
+    else if (/^END:VCARD/i.test(line)) { if (cur && cur.tels.length && (cur.nom || cur.surnom)) out.push(cur); cur = null; }
+    else if (cur) {
+      const i = line.indexOf(':'); if (i < 0) return;
+      const key = line.slice(0, i), k = key.toUpperCase().replace(/^ITEM\d+\./, ''), val = decodeV(key, line.slice(i + 1));
+      if (k === 'FN' || k.startsWith('FN;')) cur.nom = val;
+      else if ((k === 'N' || k.startsWith('N;')) && !cur.nom) { const p = val.split(';'); cur.nom = [p[1], p[0]].filter(Boolean).join(' ').trim(); }
+      else if (k === 'NICKNAME' || k.startsWith('NICKNAME;')) cur.surnom = val;
+      else if (k === 'TEL' || k.startsWith('TEL;')) { const n = normN(val); if (n && !cur.tels.includes(n)) cur.tels.push(n); }
+    }
+  });
+  return out;
+}
+function garderContacts(l) {
+  const vus = {}, out = [];
+  l.forEach(c => { const k = nrm(c.nom || c.surnom) + '|' + c.tels.join(','); if (!vus[k]) { vus[k] = 1; out.push({ n: c.nom || c.surnom, s: c.nom && c.surnom ? c.surnom : '', t: c.tels }); } });
+  LS.set('contacts', { le: new Date().toISOString(), l: out }); CT = { skip: [], pick: {} };
+  return out.length;
+}
+function lireVcf(input) {
+  const f = input.files && input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => { const n = garderContacts(parseVcf(String(r.result || ''))); toast(n ? n + ' contacts lus' : 'Aucun contact trouvé dans ce fichier', !n); renderOverlay(true); };
+  r.readAsText(f);
+}
+async function choisirContacts() {
+  try { const l = await navigator.contacts.select(['name', 'tel'], { multiple: true });
+    const n = garderContacts(l.map(c => ({ nom: (c.name || [])[0] || '', surnom: '', tels: [...new Set((c.tel || []).map(normN).filter(Boolean))] })).filter(c => c.tels.length));
+    toast(n + ' contacts lus'); renderOverlay(true);
+  } catch (e) { toast('Choix des contacts annulé', true); }
+}
+/** Propositions pour un client : d'abord par numéro (sûr), sinon par nom. */
+function propositions(c, contacts, pris) {
+  const ex = contacts.filter(k => k.t.some(t => c.numeros.includes(t)));
+  if (ex.length) return { exact: true, l: ex.slice(0, 3).map(k => ({ k, score: 100, num: k.t.find(t => c.numeros.includes(t)) })) };
+  const l = contacts.filter(k => !k.t.some(t => pris[t] && pris[t] !== c.id))
+    .map(k => ({ k, score: Math.max(simNom(c.nom, k.n), k.s ? simNom(c.nom, k.s) : 0), num: k.t[0] }))
+    .filter(x => x.score >= 55).sort((a, b) => b.score - a.score).slice(0, 3);
+  return { exact: false, l };
+}
+function numerosPris() { const p = {}; D.clients.forEach(c => { c.numeros.concat(c.whatsapp ? [c.whatsapp] : []).forEach(n => p[n] = c.id); }); return p; }
+function toutesPropositions() {
+  const ct = LS.get('contacts', null); if (!ct) return [];
+  const pris = numerosPris(), act = id => D.abos.some(a => a.client === id && EC.includes(a.statut)) ? 0 : 1;
+  return sansWa().sort((a, b) => act(a.id) - act(b.id)).map(c => ({ c, p: propositions(c, ct.l, pris) })).filter(x => x.p.l.length);
+}
+SCREENS.contacts = function () {
+  const ct = LS.get('contacts', null), sans = sansWa().length;
+  const vcf = `<label class="btn full" style="margin-top:16px;cursor:pointer">${I('book', '#111').replace('<svg', '<svg width="18" height="18"')} ${ct ? 'Choisir un nouveau fichier' : 'Importer mes contacts (.vcf)'}<input type="file" accept=".vcf,text/vcard,text/x-vcard" style="display:none" onchange="lireVcf(this)"></label>
+    ${'contacts' in navigator && navigator.contacts.select ? `<button class="btn sec full" style="margin-top:8px" onclick="choisirContacts()">Choisir dans mes contacts (Android)</button>` : ''}`;
+  if (!ct) return `${head('Retrouver les WhatsApp', sans + ' client(s) sans WhatsApp')}<div style="padding:16px 20px calc(40px + var(--bot))">
+    <div class="card gold anim"><div class="serif" style="font-size:17px;color:var(--g2)">Comment ça marche</div>
+    <div style="font-size:13.5px;line-height:1.6;margin-top:8px">1. Sur ton iPhone, ouvre l'app <b>Contacts</b>.<br>2. Touche <b>Listes</b> (en haut à gauche).<br>3. Appui long sur <b>Tous les contacts</b> → <b>Exporter</b> → <b>Enregistrer dans Fichiers</b>.<br>4. Reviens ici et choisis ce fichier.</div>
+    <div class="mu" style="margin-top:10px">🔒 Tes contacts restent sur ton téléphone. Seuls les numéros que tu valides sont enregistrés pour tes clients.</div></div>
+    ${vcf}</div>`;
+  const all = toutesPropositions(), exacts = all.filter(x => x.p.exact);
+  const l = all.filter(x => !CT.skip.includes(x.c.id)).concat(all.filter(x => CT.skip.includes(x.c.id)));
+  const entete = `<div class="mu" style="margin-top:12px">${ct.l.length} contacts lus le ${dt(ct.le)} · ${all.length} proposition(s) pour ${sans} client(s) sans WhatsApp</div>`;
+  if (!l.length) return `${head('Retrouver les WhatsApp')}<div style="padding:0 20px calc(40px + var(--bot))">${entete}<div class="empty" style="padding-top:50px"><div class="serif" style="color:var(--g2);font-size:20px">${sans ? 'Plus aucune correspondance' : 'Tous tes clients ont un WhatsApp ✨'}</div>${sans ? `<div style="margin-top:8px">Les ${sans} autre(s) ne sont pas dans ce fichier : ajoute leur numéro dans leur fiche.</div>` : ''}</div>${vcf}<button class="btn ghost full" style="margin-top:8px" onclick="LS.del('contacts');renderOverlay(true)">Effacer les contacts de l'app</button></div>`;
+  const { c, p } = l[0], a = D.abos.find(x => x.client === c.id && EC.includes(x.statut));
+  const sel = CT.pick[c.id] || (CT.pick[c.id] = { i: 0, num: p.l[0].num });
+  return `${head('Retrouver les WhatsApp', `il reste ${l.length} client(s) à confirmer`)}
+  <div style="padding:0 20px calc(40px + var(--bot))">${entete}
+  ${exacts.length > 1 ? `<button class="card tap" style="width:100%;margin-top:12px;text-align:left;color:inherit;cursor:pointer;border-color:var(--g)" onclick="accepterExacts()"><div class="sb"><b style="color:var(--g3)">Tout accepter : numéros identiques</b><span class="tag">${exacts.length}</span></div><div class="mu" style="margin-top:4px">Le contact a exactement le même numéro que le client : c'est forcément lui.</div></button>` : ''}
+  <div class="card gold anim" style="margin-top:14px">
+    <div class="mu" style="font-size:11px;letter-spacing:1px">CLIENT ICONIC</div>
+    <div class="row" style="margin-top:6px"><div class="av g">${esc(ini(c.nom))}</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:17px">${esc(c.nom)}</div><div class="mu">${esc(c.numeros.join(' · ') || 'aucun numéro')}${a ? ' · ' + esc(a.type) + ' · ' + esc(a.statut) : ''}</div></div></div>
+    <hr><div class="mu" style="font-size:11px;letter-spacing:1px">${p.exact ? '✅ MÊME NUMÉRO DANS TES CONTACTS' : 'DANS TES CONTACTS · NOM PROCHE'}</div>
+    ${p.l.map((x, i) => `<button class="tap" style="display:block;width:100%;text-align:left;margin-top:8px;padding:12px;border-radius:14px;background:${sel.i === i ? 'rgba(212,175,55,.12)' : '#0b0b0b'};border:1px solid ${sel.i === i ? 'var(--g)' : 'var(--ln)'};color:inherit;cursor:pointer" onclick="CT.pick['${c.id}']={i:${i},num:'${x.num}'};renderOverlay()">
+      <div class="sb"><b>${esc(x.k.n)}${x.k.s ? ' <span class="mu">(' + esc(x.k.s) + ')</span>' : ''}</b><span class="tag ${x.score >= 85 ? 't-ok' : ''}">${x.score} %</span></div>
+      ${sel.i === i && x.k.t.length > 1 ? `<div class="chips" style="margin-top:8px">${x.k.t.map(t => `<span class="chip ${sel.num === t ? 'on' : ''}" onclick="event.stopPropagation();CT.pick['${c.id}'].num='${t}';renderOverlay()">${esc(t)}</span>`).join('')}</div>` : `<div class="mu" style="margin-top:4px">${esc(x.k.t.join(' · '))}</div>`}
+    </button>`).join('')}
+  </div>
+  <button class="btn full" style="margin-top:16px" onclick="accepterWa('${c.id}')">${I('check', '#111').replace('<svg', '<svg width="18" height="18"')} C'est lui · WhatsApp ${esc(sel.num)}</button>
+  <div class="grid2" style="margin-top:8px">
+    <button class="btn redo" onclick="refuserWa('${c.id}')">Ce n'est pas lui</button>
+    <button class="btn ghost" onclick="CT.skip.push('${c.id}');renderOverlay(true)">Passer</button>
+  </div>
+  <div class="mu" style="margin-top:14px;line-height:1.5">« Ce n'est pas lui » : ce client ne te sera plus proposé. Tu peux toujours saisir son WhatsApp dans sa fiche.</div>
+  </div>`;
+};
+async function enregistrerWa(liste, msg) {
+  try {
+    busy(true); await call('whatsappLot', { liste }); busy(false);
+    liste.forEach(x => { const c = IX.cl[x.id]; if (c) c.whatsapp = x.whatsapp; });
+    renderOverlay(true);
+    undoToast(msg, () => call('whatsappLot', { liste, vider: true }).then(() => liste.forEach(x => { const c = IX.cl[x.id]; if (c) c.whatsapp = ''; })));
+  } catch (e) { busy(false); toast(String(e), true); }
+}
+function accepterWa(id) { const s = CT.pick[id]; if (s) enregistrerWa([{ id, whatsapp: s.num }], (IX.cl[id] || {}).nom + ' : WhatsApp enregistré'); }
+function refuserWa(id) { const l = LS.get('wa_non', []); l.push(id); LS.set('wa_non', l); renderOverlay(true); }
+function accepterExacts() {
+  const l = toutesPropositions().filter(x => x.p.exact).map(x => ({ id: x.c.id, whatsapp: x.p.l[0].num }));
+  confirmer({ titre: 'Tout accepter ?', icon: 'check', ok: 'Enregistrer ' + l.length + ' WhatsApp',
+    texte: `<b>${l.length}</b> clients ont exactement le même numéro dans tes contacts. Ce numéro devient leur WhatsApp.`,
+    action: () => enregistrerWa(l, l.length + ' WhatsApp enregistrés') });
+}
+/** Suggestion dans la fiche client. */
+function suggestionWa(c) {
+  const ct = LS.get('contacts', null); if (!ct || c.whatsapp) return '';
+  const p = propositions(c, ct.l, numerosPris()); if (!p.l.length) return '';
+  const x = p.l[0];
+  return `<div class="card anim" style="margin-top:14px;border-color:rgba(37,211,102,.4)"><div class="mu" style="font-size:11px;letter-spacing:1px">DANS TES CONTACTS</div>
+    <div class="sb" style="margin-top:6px"><div><b>${esc(x.k.n)}</b><div class="mu">${esc(x.num)} · ${p.exact ? 'même numéro' : x.score + ' % de ressemblance'}</div></div>
+    <button class="btn sm wa" onclick="enregistrerWa([{id:'${c.id}',whatsapp:'${x.num}'}],'WhatsApp enregistré')">Utiliser</button></div></div>`;
+}
+
 /* ═════════ MENU + ═════════ */
 function menuPlus() {
   const it = (ic, t, s, f) => `<button class="tap list-item" style="width:100%;background:none;border:0;border-top:1px solid #1d1d1d;color:inherit;text-align:left;cursor:pointer" onclick="closeSheet();${f}"><div class="ico" style="background:rgba(212,175,55,.1)">${I(ic, '#f6e3a8')}</div><div style="flex:1"><div style="font-weight:600">${t}</div><div class="mu">${s}</div></div></button>`;
@@ -537,18 +875,38 @@ function menuPlus() {
     ${it('inbox', 'Valider les paiements', D.aValider.length + ' en attente', "D.aValider.length?push('valider'):toast('Aucun paiement à valider')")}
     ${it('box', 'Ajouter un compte', 'Films, Musique ou PRM', 'mCompte()')}
     ${it('card', 'Ajouter une carte', 'Repère + titulaire', 'mCarte()')}
-    ${it('back2', 'Faire revenir d’anciens clients', D.business.anciens.length + ' client(s)', "push('relance')")}`);
+    ${it('back2', 'Faire revenir d’anciens clients', D.business.anciens.length + ' client(s)', "push('relance')")}
+    ${it('book', 'Retrouver les WhatsApp', sansWa().length + ' client(s) sans WhatsApp · depuis tes contacts', "push('contacts')")}`);
 }
 function mVenteManuelle(clientId) {
   const actifs = D.clients.filter(c => c.statut !== 'Supprimé').sort((a, b) => a.nom.localeCompare(b.nom));
-  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Vente manuelle</div><div class="mu" style="margin:4px 0 14px">Paiement en espèces, ou client à enregistrer.</div>
+  const ht = D.horsTarif || [];
+  VM_EDIT = false;
+  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Vente manuelle</div><div class="mu" style="margin:4px 0 14px">Espèces, somme différente du tarif, ou client à enregistrer.</div>
+    ${ht.length ? `<label class="l">Paiement reçu par SMS (montant hors tarif)</label><select id="vm_ht" onchange="vmHt()"><option value="">— Aucun (espèces ou autre) —</option>${ht.map(h => `<option value="${h.id}">${F(h.montant)} · ${esc((IX.cl[h.clientId] || {}).nom || h.nom || h.numero)} · ${dt(h.date)}</option>`).join('')}</select>` : ''}
     <label class="l">Client</label><select id="vm_cl" onchange="$('#vm_new').style.display=this.value?'none':'block'"><option value="">➕ Nouveau client</option>${actifs.map(c => `<option value="${c.id}" ${c.id === clientId ? 'selected' : ''}>${esc(c.nom)} · ${esc(c.numeros.join(', '))}</option>`).join('')}</select>
     <div id="vm_new" style="display:${clientId ? 'none' : 'block'}"><label class="l">Nom</label><input id="vm_nom"><label class="l">Numéro</label><input id="vm_num" inputmode="tel" placeholder="70 00 00 00"></div>
-    <label class="l">Session</label><select id="vm_s" onchange="vmPlaces()">${D.sessions.map(s => `<option value="${s.code}">${esc(s.libelle)} · ${F(s.prix)}</option>`).join('')}</select>
+    <label class="l">Session</label><select id="vm_s" onchange="vmPlaces();vmPrix()">${D.sessions.map(s => `<option value="${s.code}">${esc(s.libelle)} · ${F(s.prix)}</option>`).join('')}</select>
+    <label class="l">Montant reçu (F)</label><input id="vm_m" inputmode="numeric" oninput="VM_EDIT=true;vmNote()">
+    <div id="vm_note" class="mu" style="margin:-4px 0 10px"></div>
     <label class="l">Date de début</label><input id="vm_d" type="date" value="${todayIso()}">
     <label class="l">Place (laisse « Automatique » si tu ne sais pas)</label><select id="vm_p"></select>
     <button class="btn full" onclick="venteManuelle()">Enregistrer</button>`);
-  vmPlaces();
+  vmPlaces(); vmPrix();
+}
+let VM_EDIT = false;
+function vmPrix() { const s = IX.se[$('#vm_s').value]; if (s && !VM_EDIT) $('#vm_m').value = s.prix; vmNote(); }
+function vmNote() {
+  const s = IX.se[$('#vm_s').value], m = Number(($('#vm_m').value || '').replace(/\D/g, '')), el = $('#vm_note'); if (!s || !el) return;
+  el.innerHTML = m < s.prix ? `<span style="color:var(--wa)">Remise de ${F(s.prix - m)}</span> : le client garde sa durée complète, tes gains comptent ${F(m)}.` : m > s.prix ? `${F(m - s.prix)} de plus que le tarif, comptés dans tes gains.` : '';
+}
+function vmHt() {
+  const h = (D.horsTarif || []).find(x => x.id === $('#vm_ht').value), nw = $('#vm_new');
+  if (!h) { $('#vm_num').disabled = false; return; }
+  $('#vm_m').value = h.montant; VM_EDIT = true; $('#vm_d').value = isoDay(h.date);
+  if (h.clientId) { $('#vm_cl').value = h.clientId; nw.style.display = 'none'; }
+  else { $('#vm_cl').value = ''; nw.style.display = 'block'; $('#vm_nom').value = h.nom || ''; $('#vm_num').value = h.numero; }
+  vmNote();
 }
 function vmPlaces() {
   const s = IX.se[$('#vm_s').value]; if (!s) return;
@@ -556,8 +914,10 @@ function vmPlaces() {
   $('#vm_p').innerHTML = `<option value="">Automatique</option>` + l.map(p => `<option value="${p.id}">${esc(IX.cp[p.compte].mail)} · place ${p.n} (${esc(p.profil)})</option>`).join('');
 }
 async function venteManuelle() {
-  const d = { clientId: $('#vm_cl').value, nom: $('#vm_nom') ? $('#vm_nom').value : '', numero: $('#vm_num') ? $('#vm_num').value : '', session: $('#vm_s').value, date: $('#vm_d').value, placeId: $('#vm_p').value };
-  if (!d.clientId && !d.numero.trim()) return toast('Indique le numéro du client.', true);
+  const d = { clientId: $('#vm_cl').value, nom: $('#vm_nom') ? $('#vm_nom').value : '', numero: $('#vm_num') ? $('#vm_num').value : '', session: $('#vm_s').value, date: $('#vm_d').value, placeId: $('#vm_p').value,
+    montant: ($('#vm_m').value || '').replace(/\D/g, ''), venteId: $('#vm_ht') ? $('#vm_ht').value : '' };
+  if (d.montant === '') return toast('Indique le montant reçu.', true);
+  if (!d.clientId && !d.numero.trim() && !d.venteId) return toast('Indique le numéro du client.', true);
   closeSheet();
   try { const r = await call('manuelle', d); push('succes', [r]); refresh(true); } catch (e) { toast(String(e), true); }
 }
@@ -565,7 +925,7 @@ async function venteManuelle() {
 /* ═════════ CLIENTS ═════════ */
 function clientInfo(c) {
   const abos = D.abos.filter(a => a.client === c.id);
-  const enc = abos.filter(a => ['Actif', 'Grâce', 'À retirer', 'En attente'].includes(a.statut));
+  const enc = abos.filter(a => EC.includes(a.statut));
   const ventes = D.ventes.filter(v => v.client === c.id && v.statut === 'Validée');
   return { abos, enc, ventes, total: ventes.reduce((s, v) => s + v.prix, 0), renouv: ventes.filter(v => v.genre === 'Renouvellement').length };
 }
@@ -600,6 +960,7 @@ SCREENS.client = function (id) {
     <div class="serif" style="font-size:22px;color:var(--g2);margin-top:12px;text-align:center">${esc(c.nom)}</div>
     <div class="mu" style="margin-top:2px">${esc(c.numeros.join(' · '))}${c.whatsapp ? ' · WhatsApp ' + esc(c.whatsapp) : ''}</div>
   </div>
+  ${suggestionWa(c)}
   <div class="grid3 anim" style="margin-top:18px;animation-delay:.05s">
     <div class="card" style="padding:12px;text-align:center"><div style="font-weight:600">${M(x.total)}</div><div class="mu" style="font-size:11px">dépensés</div></div>
     <div class="card" style="padding:12px;text-align:center"><div style="font-weight:600">${anc} mois</div><div class="mu" style="font-size:11px">ancienneté</div></div>
@@ -610,10 +971,11 @@ SCREENS.client = function (id) {
     return `<div class="card gold anim" style="margin-bottom:8px"><div class="sb"><span style="font-weight:600">${esc(s ? s.libelle : a.type)}</span>${a.statut === 'Actif' && d <= 3 ? `<span class="tag t-wa">Expire ${jours(d)}</span>` : tagStat(a.statut)}</div>
       <div class="mu" style="margin-top:4px">${cp && p ? esc(cp.mail) + ' · place ' + p.n + ' · profil « ' + esc(p.profil) + ' » · ' : ''}jusqu’au ${dt(a.expiration)}</div>
       <div class="bar" style="margin-top:10px"><i data-w="${Math.max(4, Math.min(100, (d || 0) / 30 * 100))}%"></i></div>
-      <div class="row" style="margin-top:12px;flex-wrap:wrap">${a.place ? `<a class="btn sm wa" href="${accesWa(a)}" target="_blank" rel="noopener">Envoyer les accès</a><button class="btn sm redo" onclick="mLiberer('${a.id}')">Retirer</button>` : `<button class="btn sm ghost" onclick="mAnnulerAttente('${a.id}')">Annuler l'attente</button>`}</div></div>`; }).join('')
+      <div class="row" style="margin-top:12px;flex-wrap:wrap">${a.place ? `${['À retirer', 'Grâce'].includes(a.statut) ? `<a class="btn sm wa" href="${(D.digest.aRetirer.concat(D.digest.grace).find(b => b.id === a.id) || {}).wa || '#'}" target="_blank" rel="noopener">Rappel de paiement</a>` : `<a class="btn sm wa" href="${accesWa(a)}" target="_blank" rel="noopener">Envoyer les accès</a>`}<button class="btn sm redo" onclick="mLiberer('${a.id}')">Retirer</button>` : `<button class="btn sm ghost" onclick="mAnnulerAttente('${a.id}')">Annuler l'attente</button>`}</div></div>`; }).join('')
     : `<div class="card mu">Aucun abonnement en cours. <button class="btn sm sec" style="margin-left:6px" onclick="mVenteManuelle('${id}')">Nouvelle vente</button></div>`}
+  ${x.abos.filter(a => a.statut === 'Inventaire').map(a => { const cp = IX.cp[(a.imp || {}).compte] || {}; return `<div class="card anim" style="margin-bottom:8px;border-color:rgba(143,180,255,.35)"><div class="sb"><span style="font-weight:600">${esc(cp.mail || '')}</span>${tagStat('Inventaire')}</div><div class="mu" style="margin-top:4px">Importé de tes notes · payé le ${dt(a.debut)}</div><button class="btn sm sec" style="margin-top:10px" onclick="push('inventaire',['${a.id}'])">Vérifier maintenant</button></div>`; }).join('')}
   <h2>Historique</h2>
-  ${histo.length ? histo.map(v => { const s = IX.se[v.session]; return `<div class="row" style="gap:12px;padding:8px 0"><span style="width:8px;height:8px;border-radius:50%;background:${v.genre === 'Renouvellement' ? 'var(--g)' : '#5a5a5a'};flex:none"></span><div style="flex:1;font-size:13.5px">${esc(v.genre || 'Vente')} · ${esc(s ? s.libelle : v.session)} · ${M(v.prix)}<div class="mu" style="font-size:11px">${dtl(v.date)}</div></div></div>`; }).join('') : '<div class="mu">Aucun paiement.</div>'}
+  ${histo.length ? histo.map(v => { const s = IX.se[v.session]; return `<div class="row tap" style="gap:12px;padding:8px 0;cursor:pointer" onclick="mMontant('${v.id}')"><span style="width:8px;height:8px;border-radius:50%;background:${v.genre === 'Renouvellement' ? 'var(--g)' : '#5a5a5a'};flex:none"></span><div style="flex:1;font-size:13.5px">${esc(v.genre || 'Vente')} · ${esc(s ? s.libelle : v.session)} · ${M(v.prix)}<div class="mu" style="font-size:11px">${dtl(v.date)}</div></div>${I('edit', '#6f6f6f').replace('<svg', '<svg width="15" height="15" style="flex:none"')}</div>`; }).join('') + '<div class="mu" style="font-size:11px;margin-top:4px">Touche un paiement pour corriger la somme reçue.</div>' : '<div class="mu">Aucun paiement.</div>'}
   ${c.notes ? `<h2>Notes</h2><div class="card" style="font-size:14px">${esc(c.notes)}</div>` : ''}
   <div class="grid3" style="margin-top:24px">
     <a class="btn wa" href="https://wa.me/${D.params.indicatif}${esc(c.whatsapp || c.numeros[0] || '')}" target="_blank" rel="noopener">WhatsApp</a>
@@ -621,6 +983,22 @@ SCREENS.client = function (id) {
     <button class="btn redo" onclick="mSupprimerClient('${id}')">Supprimer</button>
   </div></div>`;
 };
+function mMontant(id) {
+  const v = D.ventes.find(x => x.id === id); if (!v) return;
+  const tarif = String(v.session || '').split('+').reduce((t, c) => t + ((IX.se[c] || {}).prix || 0), 0);
+  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Somme reçue</div>
+    <div class="mu" style="margin:4px 0 14px">${esc(v.genre || 'Vente')} du ${dt(v.date)} · tarif ${F(tarif)}</div>
+    <label class="l">Montant réellement reçu (F)</label><input id="mm_v" inputmode="numeric" value="${v.prix}">
+    <div class="mu" style="margin:-4px 0 12px">La durée de l'abonnement ne change pas. Seuls tes gains sont corrigés.</div>
+    <button class="btn full" id="mm_ok">Enregistrer</button>`);
+  $('#mm_ok').onclick = async () => {
+    const m = ($('#mm_v').value || '').replace(/\D/g, ''); if (m === '') return toast('Indique un montant.', true);
+    closeSheet();
+    try { busy(true); const r = await call('modifierMontant', { venteId: id, montant: m }); busy(false); v.prix = Number(m); renderOverlay();
+      undoToast('Montant corrigé : ' + F(m), () => call('modifierMontant', { venteId: id, montant: r.avant })); refresh(true);
+    } catch (e) { busy(false); toast(String(e), true); }
+  };
+}
 function accesWa(a) {
   const c = IX.cl[a.client], cp = IX.cp[a.compte], p = IX.pl[a.place], s = IX.se[a.session];
   if (!c || !cp || !p) return '#';
@@ -824,10 +1202,43 @@ function vGains() {
     <div class="card" style="padding:12px"><div style="font-weight:600">${g.ventes || 0}</div><div class="mu" style="font-size:11px">ventes</div></div>
   </div>
   <div class="mu" style="margin-top:8px">${g.nouveaux || 0} nouveaux · ${g.renouvellements || 0} renouvellements · ${g.retours || 0} retours · ${g.departs || 0} départs${g.recu > g.encaisse && !MASK ? ' · frais ajoutés : ' + F(g.recu - g.encaisse) : ''}</div>
+  ${vSante(b.sante)}
   <h2>Rentabilité par compte</h2>
   ${b.rentabilite.map(r => `<div class="list-item"><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis">${esc(r.mail.split('@')[0])}</div><div class="mu" style="font-size:11px">${r.occupees}/${r.places} places${r.vides ? ' · ' + r.vides + ' vide(s)' : ''} · ${esc(r.type)}</div></div><div style="font-weight:600;font-size:14px;color:${r.profit >= 0 ? 'var(--ok)' : 'var(--ko)'}">${MASK ? '•••' : (r.profit >= 0 ? '+ ' : '− ') + F(Math.abs(r.profit))}</div></div>`).join('') || '<div class="mu">Aucun compte.</div>'}
   <h2>Par type</h2>
   ${Object.keys(g.parType || {}).map(t => { const v = g.parType[t], top = Math.max(1, ...Object.values(g.parType).map(x => x.encaisse)); return `<div style="margin-bottom:12px"><div class="sb" style="font-size:13px"><span>${esc(t)}</span><span style="color:var(--g2);font-weight:600">${M(v.encaisse)}</span></div><div class="bar" style="margin-top:6px;height:8px"><i data-w="${v.encaisse / top * 100}%" style="background:linear-gradient(90deg,#c9a24a,#f6e3a8)"></i></div><div class="mu" style="font-size:11px;margin-top:4px">${v.ventes} vente(s)</div></div>`; }).join('') || '<div class="mu">Pas encore de ventes ce mois-ci.</div>'}`;
+}
+
+
+function vSante(h) {
+  if (!h) return '';
+  const col = h.score >= 75 ? 'var(--ok)' : h.score >= 55 ? 'var(--g2)' : 'var(--wa)';
+  const tile = (v, t, c) => `<div class="card" style="padding:12px"><div style="font-weight:600;font-size:16px;${c ? 'color:' + c : ''}">${v}</div><div class="mu" style="font-size:11px;line-height:1.35">${t}</div></div>`;
+  const ev = (h.evolution || []).slice().reverse(), mx = Math.max(1, ...ev.map(e => Math.max(e.nouveaux, e.departs)));
+  const conseils = [];
+  if (h.partisApres1 != null && h.partisApres1 >= 40) conseils.push(`<b>${h.partisApres1} %</b> de tes clients partis ne sont restés qu'un mois. Un rappel chaleureux 3 jours avant la fin du 1er mois peut en garder une partie.`);
+  if (h.aRetirer) conseils.push(`<b>${h.aRetirer}</b> client(s) ont dépassé leur délai : relance-les avec le lien de paiement avant de les retirer.`);
+  if (h.solde < 0) conseils.push(`Ce mois-ci, tu perds plus de clients (${h.departs30}) que tu n'en gagnes (${h.nouveaux30}).`);
+  if (h.occupation < 80 && h.placesLibres) conseils.push(`${h.placesLibres} place(s) libre(s) : chaque place remplie, c'est environ ${MASK ? '•••' : F(h.panier)} de plus par mois.`);
+  if (!conseils.length) conseils.push('Tout va bien : continue comme ça ✨');
+  return `<h2>Santé du business</h2>
+  <div class="card gold anim" style="display:flex;gap:16px;align-items:center">
+    <div style="width:76px;height:76px;border-radius:50%;flex:none;padding:4px;background:conic-gradient(${col} 0 ${h.score}%,#2a2a2a 0 100%)"><div style="width:100%;height:100%;border-radius:50%;background:#151515;display:flex;align-items:center;justify-content:center;flex-direction:column"><b style="font-size:22px;color:${col}">${h.score}</b><span class="mu" style="font-size:9px">/ 100</span></div></div>
+    <div style="flex:1"><div class="serif" style="font-size:18px;color:${col}">${esc(h.niveau)}</div><div class="mu" style="line-height:1.45">${h.actifs} clients actifs · ${h.occupation} % des places occupées · ${h.fideles} fidèle(s) depuis 6 mois ou plus</div></div>
+  </div>
+  <div class="grid2 anim" style="margin-top:10px;animation-delay:.05s">
+    ${tile(h.vie != null ? h.vie + ' mois' : '—', 'durée de vie moyenne d’un client' + (h.viePartis != null ? ` (ceux qui partent : ${h.viePartis} mois)` : ''))}
+    ${tile(MASK ? '•••••' : F(h.valeur), 'ce que te rapporte un client sur toute sa durée')}
+    ${tile(`<span style="color:var(--ok)">+${h.nouveaux30}</span> / <span style="color:var(--ko)">−${h.departs30}</span>`, 'arrivées / départs sur 30 jours')}
+    ${tile(h.churn != null ? h.churn + ' %' : '—', 'des clients partis ces 30 derniers jours', h.churn != null && h.churn > 25 ? 'var(--wa)' : '')}
+    ${tile(MASK ? '•••••' : F(h.panier), 'panier moyen par client et par mois')}
+    ${tile(MASK ? '•••••' : F(h.revenuMensuel), 'revenu mensuel des clients actifs')}
+  </div>
+  <div class="card anim" style="margin-top:10px;animation-delay:.1s"><div class="sb" style="font-size:12px"><b>Arrivées et départs</b><span class="mu"><span style="color:var(--ok)">■</span> arrivées <span style="color:var(--ko)">■</span> départs</span></div>
+    <div style="display:flex;align-items:flex-end;gap:8px;height:90px;margin-top:10px">${ev.map(e => `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px"><div style="display:flex;align-items:flex-end;gap:3px;height:70px"><i style="display:block;width:9px;border-radius:3px;background:var(--ok);height:${Math.max(2, e.nouveaux / mx * 70)}px" title="${e.nouveaux}"></i><i style="display:block;width:9px;border-radius:3px;background:var(--ko);height:${Math.max(2, e.departs / mx * 70)}px" title="${e.departs}"></i></div><span class="mu" style="font-size:10px">${esc(MC[e.mois.split(' ')[0]] || '')}</span></div>`).join('')}</div></div>
+  <div class="card anim" style="margin-top:10px;animation-delay:.15s"><b style="font-size:13px;color:var(--g3)">Mes conseils</b>${conseils.map(t => `<div style="font-size:13px;line-height:1.5;margin-top:8px">• ${t}</div>`).join('')}</div>
+  ${h.top.length ? `<div class="card anim" style="margin-top:10px"><b style="font-size:13px">Tes clients les plus fidèles</b>${h.top.map(f => `<button class="tap sb" style="width:100%;background:none;border:0;color:inherit;padding:8px 0;cursor:pointer" onclick="push('client',['${f.id}'])"><span>${esc(f.nom)}</span><span class="tag t-ok">${f.mois} mois</span></button>`).join('')}</div>` : ''}
+  ${h.total && h.importes / h.total > .3 ? `<div class="mu" style="margin-top:8px;line-height:1.45">ℹ️ Pour tes clients importés de tes notes, l'app ne connaît que le dernier paiement : la durée de vie est donc sous-estimée pour l'instant et deviendra plus juste chaque mois.</div>` : ''}`;
 }
 
 /* ═════════ RELANCE ═════════ */
@@ -843,7 +1254,7 @@ SCREENS.relance = function () {
 };
 function relancer(el, id) {
   const a = D.business.anciens.find(x => x.id === id), msg = ($('#rl_m').value || '').replace(/\{prénom\}/g, (a.nom || '').split(' ')[0]);
-  el.href = `https://wa.me/${D.params.indicatif}${a.whatsapp}?text=${encodeURIComponent(msg)}`;
+  el.href = `https://wa.me/${D.params.indicatif}${a.whatsapp}?text=${encodeURIComponent(msg + (a.paiement ? '\n👉 Payer en un geste : ' + a.paiement : ''))}`;
   call('relance', { id }).then(() => refresh(true)).catch(() => {});
 }
 
@@ -854,14 +1265,48 @@ SCREENS.reglages = function () {
   return `${head('Réglages')}<div style="padding:16px 20px calc(40px + var(--bot))">
   <label class="l">Ton prénom (affiché sur l'accueil)</label><input value="${esc(LS.get('prenom', ''))}" placeholder="Ex. Moïse" onchange="LS.set('prenom',this.value.trim());render()">
   ${it('bell', 'Notifications de l’app', !D.notif.appId ? 'À configurer : voir le guide (OneSignal)' : notifOk ? 'Activées sur cet iPhone' : 'Touche pour les activer', 'activerNotifs()', notifOk ? '<span class="tag t-ok">Oui</span>' : '')}
+  ${it('gear', 'Réglages du système', 'Notifications, validation auto, délais, numéro de dépôt', "push('parametres')")}
   ${it('lock', 'Changer mon code', 'Code à 4 chiffres demandé à l’ouverture', 'changerCode()')}
   ${window.PublicKeyCredential ? it('face', 'Face ID', fid ? 'Activé : déverrouillage sans code' : 'Déverrouiller avec ton visage', 'toggleFaceId()', fid ? '<span class="tag t-ok">Oui</span>' : '') : ''}
   ${it('save', 'Sauvegarder maintenant', 'Reçois ton tableau en Excel par e-mail', "act('sauvegarde',{},'Sauvegarde envoyée par e-mail')")}
+  ${it('back2', 'Mises à jour', D.maj && D.maj.erreur ? '⚠️ Dernier essai échoué : touche pour réessayer' : 'Automatiques · touche pour vérifier maintenant', 'verifierMaj()', '<span class="tag">' + esc(D.version || '2') + '</span>')}
   ${it('trash', 'Corbeille', 'Clients et cartes supprimés', "push('corbeille')")}
   ${it('box', 'Ouvrir le tableau Google', 'Paramètres, sessions, prix', `window.open('${esc(D.ssUrl)}','_blank')`)}
   ${it('back', 'Se déconnecter de cet iPhone', 'Il faudra recoller ton lien', 'deconnexion()')}
-  <div class="mu" style="text-align:center;margin-top:24px">ICONIC Collection · version 2</div></div>`;
+  <div class="mu" style="text-align:center;margin-top:24px">ICONIC Collection · serveur ${esc(D.version || '2')} · app ${APP_VERSION}</div></div>`;
 };
+async function verifierMaj() {
+  try { busy(true); const r = await call('miseAJour'); busy(false);
+    if (r && r.installee) { toast('Version ' + r.version + ' installée ✨'); setTimeout(() => refresh(true), 70000); }
+    else toast('Tu as déjà la dernière version (' + (D.version || '') + ')');
+  } catch (e) { busy(false); toast(/Action inconnue/.test(String(e)) ? 'Colle d’abord Code.gs 2.3 dans Google (voir le guide)' : String(e), true); }
+}
+SCREENS.parametres = function () {
+  if (!window._REG) { call('reglages').then(r => { window._REG = r; renderOverlay(); }).catch(e => toast(String(e), true)); return `${head('Réglages du système')}<div class="wrap"><div class="sk" style="height:300px"></div></div>`; }
+  const R = window._REG, oui = k => String(R[k] || 'oui').toLowerCase() !== 'non';
+  const sw = (k, t, s) => `<label class="list-item" style="cursor:pointer"><div style="flex:1"><div style="font-weight:600">${t}</div><div class="mu">${s}</div></div><input type="checkbox" id="rg_${k}" ${oui(k) ? 'checked' : ''} style="width:24px;height:24px;margin:0;accent-color:#d4af37"></label>`;
+  const nb = (k, t) => `<div><label class="l">${t}</label><input id="rg_${k}" inputmode="numeric" value="${esc(R[k] || '')}"></div>`;
+  return `${head('Réglages du système', 'Enregistrés dans ton tableau Google')}<div style="padding:16px 20px calc(40px + var(--bot))">
+  <h2 style="margin-top:4px">Notifications (OneSignal)</h2>
+  <label class="l">App ID</label><input id="rg_ONESIGNAL_APP_ID" autocapitalize="off" placeholder="ex. 1a2b3c4d-…" value="${esc(R.ONESIGNAL_APP_ID || '')}">
+  <label class="l">Clé API REST ${R.ONESIGNAL_API_KEY ? '(déjà enregistrée : laisse tel quel pour la garder)' : ''}</label><input id="rg_ONESIGNAL_API_KEY" autocapitalize="off" placeholder="Colle ta clé ici" value="${esc(R.ONESIGNAL_API_KEY || '')}">
+  ${sw('NOTIF_EMAIL', 'Recevoir aussi les e-mails', 'Pour chaque paiement et les rappels du matin')}
+  <h2>Automatisation</h2>
+  ${sw('VALIDATION_AUTO', 'Validation automatique', 'Renouvellements sans ambiguïté validés seuls (annulables 24 h)')}
+  <h2>Délais et montants</h2>
+  <div class="grid2">${nb('GRACE_JOURS', 'Jours de grâce')}${nb('RAPPEL_CLIENT_JOURS', 'Rappel client (jours avant)')}${nb('RAPPEL_COMPTE_JOURS', 'Rappel compte (jours avant)')}${nb('MARGE', 'Marge de frais acceptée (F)')}</div>
+  <label class="l">Ton numéro Orange Money de dépôt (affiché dans les rappels)</label><input id="rg_NUMERO_DEPOT" inputmode="tel" value="${esc(R.NUMERO_DEPOT || '')}">
+  <label class="l">Code de paiement Orange Money ({numero} et {montant} sont remplacés)</label><input id="rg_USSD_PAIEMENT" autocapitalize="off" value="${esc(R.USSD_PAIEMENT || '*144*2*1*{numero}*{montant}#')}">
+  <div class="mu" style="margin:-6px 0 12px">Utilisé pour le lien « Payer en un geste » dans les rappels.</div>
+  <button class="btn full" onclick="sauverReg()">Enregistrer</button>
+  <button class="btn sec full" style="margin-top:8px" onclick="act('testNotif',{},'Notification de test envoyée')">Envoyer une notification de test</button>
+  </div>`;
+};
+async function sauverReg() {
+  const g = k => { const el = $('#rg_' + k); return el.type === 'checkbox' ? (el.checked ? 'oui' : 'non') : el.value; };
+  const d = {}; ['ONESIGNAL_APP_ID', 'ONESIGNAL_API_KEY', 'NOTIF_EMAIL', 'VALIDATION_AUTO', 'GRACE_JOURS', 'RAPPEL_CLIENT_JOURS', 'RAPPEL_COMPTE_JOURS', 'MARGE', 'NUMERO_DEPOT', 'USSD_PAIEMENT'].forEach(k => d[k] = g(k));
+  try { busy(true); window._REG = await call('sauverReglages', d); busy(false); toast('Réglages enregistrés'); renderOverlay(); refresh(true); } catch (e) { busy(false); toast(String(e), true); }
+}
 function deconnexion() {
   confirmer({ titre: 'Se déconnecter ?', texte: 'Tu devras recoller ton lien et recréer ton code.', danger: true, icon: 'back', ok: 'Se déconnecter',
     action: () => { ['cfg', 'cache', 'pin', 'fid'].forEach(LS.del); location.hash = ''; location.reload(); } });
@@ -883,7 +1328,7 @@ function chargerOneSignal() {
   });
 }
 async function activerNotifs() {
-  if (!D.notif.appId) return sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Notifications à configurer</div><div style="font-size:14px;line-height:1.5;margin-top:10px">Crée ton compte OneSignal, puis colle l'<b>App ID</b> et la <b>clé API</b> dans l'onglet <b>Paramètres</b> de ton tableau Google (lignes ONESIGNAL_APP_ID et ONESIGNAL_API_KEY). Tout est expliqué dans le guide.</div>`);
+  if (!D.notif.appId) return sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Notifications à configurer</div><div style="font-size:14px;line-height:1.5;margin-top:10px">Crée ton compte OneSignal, puis colle l'<b>App ID</b> et la <b>clé API</b> dans <b>Réglages → Réglages du système</b>.</div><button class="btn full" style="margin-top:14px" onclick="closeSheet();push('parametres')">Ouvrir les réglages</button><div></div>`);
   if (!navigator.standalone && !matchMedia('(display-mode: standalone)').matches) return toast("Ouvre l'app depuis son icône sur l'écran d'accueil pour activer les notifications.", true);
   await chargerOneSignal();
   try { await window._OS.Notifications.requestPermission(); setTimeout(renderOverlay, 800); if (Notification.permission === 'granted') toast('Notifications activées'); } catch (e) { toast('Impossible d’activer les notifications : ' + e, true); }
@@ -984,11 +1429,12 @@ async function connexion() {
 (function demarrer() {
   const fin = () => { const s = $('#splash'); s.style.opacity = 0; setTimeout(() => s.remove(), 500); };
   setTimeout(fin, 1100);
+  try { if ('serviceWorker' in navigator) { const base = location.pathname.replace(/[^/]*$/, ''); navigator.serviceWorker.register(base + 'OneSignalSDKWorker.js', { scope: base }).catch(() => {}); } } catch (e) {}
   if (!CFG) return vConnexion();
   D = LS.get('cache', null);
   if (D) indexer();
   if (!LS.get('pin', null)) { lockScreen('create'); } else lockScreen('unlock');
-  call('load').then(d => { D = d; LS.set('cache', D); indexer(); if (!LOCKED) { render(); renderOverlay(); } chargerOneSignal(); })
+  call('load').then(d => { appliquer(d); chargerOneSignal(); })
     .catch(e => { if (String(e).indexOf('Accès refusé') >= 0) { LS.del('cfg'); CFG = null; $('#lockbox').innerHTML = ''; vConnexion("Ta clé n'est plus valide."); } else if (!D) toast(String(e), true); });
   call('app', { url: location.origin + location.pathname }).catch(() => {});
 })();
