@@ -11,7 +11,7 @@
  * ═══════════════════════════════════════════════════════════
  */
 
-const VERSION = '2.3.1';
+const VERSION = '2.3.2';
 const MARQUE = 'ICONIC Collection';
 const TZ = 'Africa/Ouagadougou';
 
@@ -1956,6 +1956,8 @@ function infoVersion_() {
 }
 
 function miseAJour_(manuel) {
+  // Avec le chargeur (Code.gs court), la mise à jour se fait depuis GitHub sans l'API Apps Script.
+  if (typeof chargeurMaj_ === 'function') return chargeurMaj_(false);
   const props = props_();
   const lire = function (f) {
     const r = UrlFetchApp.fetch(DEPOT_MAJ + f + '?t=' + Date.now(), { muteHttpExceptions: true });
@@ -2012,6 +2014,8 @@ function apresMiseAJour() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'apresMiseAJour') ScriptApp.deleteTrigger(t); });
   installer();
   journal_('INFO', 'Migration ' + VERSION + ' terminée.');
+  hist_('Système', '', 'Mise à jour', 'Version ' + VERSION + ' installée');
+  try { push_('⬆️ ICONIC mis à jour', 'Version ' + VERSION + ' installée', 'accueil', params_()); } catch (e) {}
 }
 
 /** En cas de problème : remet la version précédente de l'app (à exécuter dans l'éditeur). */
