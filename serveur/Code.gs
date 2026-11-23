@@ -11,7 +11,7 @@
  * ═══════════════════════════════════════════════════════════
  */
 
-const VERSION = '2.3.2';
+const VERSION = '2.3.3';
 const MARQUE = 'ICONIC Collection';
 const TZ = 'Africa/Ouagadougou';
 
@@ -717,7 +717,7 @@ function ajouterCompte_(d) {
   const t = rows_(S.TYPES).find(function (x) { return x.Type === d.type; });
   if (!t) throw new Error('Choisis un type de compte.');
   if (!String(d.mail || '').trim()) throw new Error('Le mail est obligatoire.');
-  verifierCarte_(d.carte, null, P);
+  verifierCarte_(d.carte, null, P, d.type);
   const nb = Number(d.places || t['Places par défaut']);
   const c = {
     'ID': nextId_('CPT'), 'Type': d.type, 'Mail': String(d.mail).trim(), 'Mot de passe': d.mdp || '', 'Nom': d.nom || '',
@@ -745,7 +745,7 @@ function modifierCompte_(d) {
   const c = rows_(S.COMPTES).find(function (x) { return x.ID === d.id; });
   if (!c) throw new Error('Compte introuvable.');
   if (d.carte !== undefined && String(d.carte) !== String(c.Carte)) {
-    verifierCarte_(d.carte, c.ID, P);
+    verifierCarte_(d.carte, c.ID, P, c.Type);
     hist_('Compte', c.ID, 'Carte changée', c.Mail + ' : ' + (c.Carte || 'aucune') + ' → ' + (d.carte || 'aucune'));
     if (c.Carte) hist_('Carte', c.Carte, 'Compte retiré', c.Mail);
     if (d.carte) hist_('Carte', d.carte, 'Compte relié', c.Mail);
@@ -808,13 +808,14 @@ function payerCompte_(d) {
 
 /* ═════════════════════ CARTES ═════════════════════ */
 
-function verifierCarte_(carteId, compteExclu, P) {
+/** Limite : MAX_COMPTES_PAR_CARTE comptes de chaque type par carte (ex. 3 Films + 3 Musique + 3 PRM). */
+function verifierCarte_(carteId, compteExclu, P, type) {
   if (!carteId) return;
   const ca = rows_(S.CARTES).find(function (x) { return x.ID === carteId; });
   if (!ca) throw new Error('Carte introuvable.');
   if (ca.Statut !== 'Active') throw new Error('Cette carte n\'est plus active.');
-  const n = rows_(S.COMPTES).filter(function (c) { return c.Statut === 'Actif' && c.Carte === carteId && c.ID !== compteExclu; }).length;
-  if (n >= P.maxCarte) throw new Error('La carte « ' + ca['Repère'] + ' » est déjà reliée à ' + n + ' comptes (maximum ' + P.maxCarte + ').');
+  const n = rows_(S.COMPTES).filter(function (c) { return c.Statut === 'Actif' && c.Carte === carteId && c.ID !== compteExclu && (!type || c.Type === type); }).length;
+  if (n >= P.maxCarte) throw new Error('La carte « ' + ca['Repère'] + ' » a déjà ' + n + ' comptes ' + (type || '') + ' (maximum ' + P.maxCarte + ' par type).');
 }
 
 function verifierRepere_(r) {
@@ -860,10 +861,12 @@ function remplacerCarte_(d) {
   const nouvelle = rows_(S.CARTES).find(function (x) { return x.ID === nouvelleId; });
   if (!nouvelle || nouvelle.Statut !== 'Active') throw new Error('La nouvelle carte doit être active.');
   const comptes = rows_(S.COMPTES).filter(function (c) { return c.Statut === 'Actif' && c.Carte === ancienne.ID; });
-  const deja = rows_(S.COMPTES).filter(function (c) { return c.Statut === 'Actif' && c.Carte === nouvelleId; }).length;
-  if (deja + comptes.length > P.maxCarte) {
-    throw new Error('La carte « ' + nouvelle['Repère'] + ' » aurait ' + (deja + comptes.length) + ' comptes (maximum ' + P.maxCarte + ').');
-  }
+  const types = {};
+  comptes.forEach(function (c) { types[c.Type] = (types[c.Type] || 0) + 1; });
+  Object.keys(types).forEach(function (ty) {
+    const deja = rows_(S.COMPTES).filter(function (c) { return c.Statut === 'Actif' && c.Carte === nouvelleId && c.Type === ty; }).length;
+    if (deja + types[ty] > P.maxCarte) throw new Error('La carte « ' + nouvelle['Repère'] + ' » aurait ' + (deja + types[ty]) + ' comptes ' + ty + ' (maximum ' + P.maxCarte + ' par type).');
+  });
   comptes.forEach(function (c) {
     c.Carte = nouvelleId;
     update_(S.COMPTES, c);
@@ -1009,8 +1012,11 @@ function anomalies_(P, t, clients, comptesL, cartesL, cartes, placesL, abosL, li
   const actifs = comptesL.filter(function (c) { return c.Statut === 'Actif'; });
   const abos = index_(abosL);
   cartesL.forEach(function (ca) {
-    const n = actifs.filter(function (c) { return c.Carte === ca.ID; }).length;
-    if (n > P.maxCarte) out.push('La carte « ' + ca['Repère'] + ' » est reliée à ' + n + ' comptes (maximum ' + P.maxCarte + ').');
+    const parType = {};
+    actifs.filter(function (c) { return c.Carte === ca.ID; }).forEach(function (c) { parType[c.Type] = (parType[c.Type] || 0) + 1; });
+    Object.keys(parType).forEach(function (ty) {
+      if (parType[ty] > P.maxCarte) out.push('La carte « ' + ca['Repère'] + ' » a ' + parType[ty] + ' comptes ' + ty + ' (maximum ' + P.maxCarte + ' par type).');
+    });
   });
   actifs.forEach(function (c) {
     if (!c.Carte) out.push('Le compte ' + c.Mail + ' n\'a pas de carte. Ajoutes-en une.');

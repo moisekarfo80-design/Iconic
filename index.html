@@ -161,7 +161,7 @@ details summary{cursor:pointer;color:var(--g2);font-size:13.5px;list-style:none}
 
 <script>
 /* ═════════ ICONIC Collection · application v2 ═════════ */
-const APP_VERSION = '2.3.5';
+const APP_VERSION = '2.3.6';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('iconic_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('iconic_' + k, JSON.stringify(v)); } catch (e) {} },
@@ -1112,10 +1112,13 @@ function mPlaceOcc(pid) {
     <button class="btn sec full" style="margin-top:8px" onclick="closeSheet();mPreparer('${pid}')">Modifier profil / code</button>
     <button class="btn redo full" style="margin-top:8px" onclick="closeSheet();mLiberer('${p.abo}')">Retirer ce client</button>`);
 }
-function carteOptions(sel, exclu) {
+// Limite : maxCarte comptes DE CHAQUE TYPE par carte (3 Films + 3 Musique + 3 PRM)
+const nbSurCarte = (caId, type, exclu) => D.comptes.filter(c => c.statut === 'Actif' && c.carte === caId && c.type === type && c.id !== exclu).length;
+const courtType = t => /film/i.test(t) ? 'Films' : /musique/i.test(t) ? 'Musique' : t;
+function carteOptions(sel, exclu, type) {
   return `<option value="">— Aucune carte —</option>` + D.cartes.filter(c => c.statut === 'Active').map(ca => {
-    const n = D.comptes.filter(c => c.statut === 'Actif' && c.carte === ca.id && c.id !== exclu).length, plein = n >= D.params.maxCarte && ca.id !== sel;
-    return `<option value="${ca.id}" ${ca.id === sel ? 'selected' : ''} ${plein ? 'disabled' : ''}>${esc(ca.repere)} (${n}/${D.params.maxCarte})${plein ? ' – complète' : ''}</option>`;
+    const n = nbSurCarte(ca.id, type, exclu), plein = n >= D.params.maxCarte && ca.id !== sel;
+    return `<option value="${ca.id}" ${ca.id === sel ? 'selected' : ''} ${plein ? 'disabled' : ''}>${esc(ca.repere)} (${n}/${D.params.maxCarte} ${esc(courtType(type))})${plein ? ' – complète' : ''}</option>`;
   }).join('');
 }
 function mCompte(id) {
@@ -1125,7 +1128,7 @@ function mCompte(id) {
     <label class="l">Mail</label><input id="fc_mail" type="email" autocapitalize="off" value="${c ? esc(c.mail) : ''}">
     <label class="l">Mot de passe</label><input id="fc_mdp" autocapitalize="off" value="${c ? esc(c.mdp) : ''}">
     <div class="grid2"><div><label class="l">Nom</label><input id="fc_nom" value="${c ? esc(c.nom) : ''}"></div><div><label class="l">Téléphone</label><input id="fc_tel" inputmode="tel" value="${c ? esc(c.tel) : ''}"></div></div>
-    <label class="l">Carte (max ${D.params.maxCarte} comptes par carte)</label><select id="fc_carte">${carteOptions(c ? c.carte : '', c ? c.id : '')}</select>
+    <label class="l">Carte (max ${D.params.maxCarte} comptes de chaque type par carte)</label><select id="fc_carte">${carteOptions(c ? c.carte : '', c ? c.id : '', c ? c.type : t0.type)}</select>
     <div class="grid2"><div><label class="l">Coût mensuel (F)</label><input id="fc_cout" inputmode="numeric" value="${c ? c.cout : t0.cout}"></div><div><label class="l">Nombre de places</label><input id="fc_pl" inputmode="numeric" value="${c ? c.places : t0.places}" oninput="fcProfils()"></div></div>
     <label class="l">Date d'expiration de l'abonnement</label><input id="fc_exp" type="date" value="${c ? isoDay(c.expiration) : ''}">
     ${c ? '' : `<label class="l">Profils et codes (tu peux les compléter plus tard)</label><div id="fc_profils"></div>`}
@@ -1133,7 +1136,7 @@ function mCompte(id) {
     <button class="btn ghost full" style="margin-top:8px" onclick="closeSheet()">Annuler</button>`);
   if (!c) fcProfils();
 }
-function fcType() { const t = D.types.find(x => x.type === $('#fc_type').value); if (t) { $('#fc_cout').value = t.cout; $('#fc_pl').value = t.places; fcProfils(); } }
+function fcType() { const t = D.types.find(x => x.type === $('#fc_type').value); if (t) { $('#fc_cout').value = t.cout; $('#fc_pl').value = t.places; fcProfils(); const s = $('#fc_carte'), v = s.value; s.innerHTML = carteOptions(v, '', t.type); if (s.selectedOptions[0] && s.selectedOptions[0].disabled) s.value = ''; } }
 function fcProfils() {
   const el = $('#fc_profils'); if (!el) return;
   const n = Math.min(Number($('#fc_pl').value) || 0, 12), old = [...el.querySelectorAll('.pr')].map(r => [r.children[0].value, r.children[1].value]);
@@ -1170,10 +1173,13 @@ SCREENS.deplaces = function (l) {
 function vListeCartes() {
   const actives = D.cartes.filter(c => c.statut === 'Active'), autres = D.cartes.filter(c => !['Active', 'Supprimée'].includes(c.statut));
   const carte = (ca, i) => {
-    const cps = D.comptes.filter(c => c.statut === 'Actif' && c.carte === ca.id), plein = cps.length >= D.params.maxCarte;
-    return `<div class="card anim" style="margin-bottom:8px;animation-delay:${i * .04}s;${cps.length > D.params.maxCarte ? 'border-color:rgba(226,87,76,.5)' : ''}">
-      <div class="sb"><div class="row">${I('card', '#f6e3a8').replace('<svg', '<svg width="22" height="22"')}<b>${esc(ca.repere)}</b></div>${ca.statut === 'Active' ? `<span class="tag ${plein ? 't-wa' : 't-ok'}">${cps.length}/${D.params.maxCarte}</span>` : tagStat(ca.statut)}</div>
+    const cps = D.comptes.filter(c => c.statut === 'Actif' && c.carte === ca.id);
+    const parType = D.types.map(t => ({ t: t.type, n: nbSurCarte(ca.id, t.type) }));
+    const plein = parType.every(x => x.n >= D.params.maxCarte), trop = parType.some(x => x.n > D.params.maxCarte);
+    return `<div class="card anim" style="margin-bottom:8px;animation-delay:${i * .04}s;${trop ? 'border-color:rgba(226,87,76,.5)' : ''}">
+      <div class="sb"><div class="row">${I('card', '#f6e3a8').replace('<svg', '<svg width="22" height="22"')}<b>${esc(ca.repere)}</b></div>${ca.statut === 'Active' ? `<span class="tag ${plein ? 't-wa' : 't-ok'}">${cps.length} compte(s)</span>` : tagStat(ca.statut)}</div>
       ${ca.titulaire ? `<div class="mu" style="margin-top:4px">${esc(ca.titulaire)}</div>` : ''}
+      ${ca.statut === 'Active' ? `<div class="row" style="gap:6px;margin-top:8px;flex-wrap:wrap">${parType.map(x => `<span class="tag ${x.n > D.params.maxCarte ? 't-ko' : x.n >= D.params.maxCarte ? 't-wa' : ''}" style="font-size:11px">${esc(courtType(x.t))} ${x.n}/${D.params.maxCarte}</span>`).join('')}</div>` : ''}
       ${cps.map(c => `<div class="row" style="margin-top:8px;gap:8px"><button class="tap" style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:#0b0b0b;border:1px solid var(--ln);color:inherit;text-align:left;cursor:pointer" onclick="push('compte',['${c.id}'])">${I('box', '#f3dfa2').replace('<svg', '<svg width="16" height="16" style="flex:none"')}<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px"><b>${esc(c.mail)}</b><span class="mu" style="display:block;font-size:11px">${esc(c.type)}</span></span><span style="color:var(--g2)">›</span></button>${ca.statut === 'Active' ? `<button class="ib" aria-label="Retirer de la carte" style="width:42px;height:42px;flex:none" onclick="detacherCompte('${c.id}','${ca.id}')">${I('x', '#ff8a80')}</button>` : ''}</div>`).join('')}
       ${ca.statut === 'Active' && !plein ? `<button class="btn sm sec full" style="margin-top:10px;border-style:dashed" onclick="mRelier('${ca.id}')">＋ Ajouter un compte à cette carte</button>` : ''}
       ${ca.statut === 'Active' ? `<div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="btn sm sec" onclick="mCarte('${ca.id}')">Modifier</button><button class="btn sm" onclick="mRemplacer('${ca.id}')">Remplacer</button>${cps.length ? '' : `<button class="btn sm redo" onclick="mSupprimerCarte('${ca.id}')">Supprimer</button>`}</div>` : ''}</div>`;
@@ -1195,12 +1201,12 @@ function mCarte(id) {
   $('#ca_ok').onclick = async () => { const d = { repere: $('#ca_r').value, titulaire: $('#ca_t').value, notes: $('#ca_n').value }; if (id) d.id = id; try { await act(id ? 'modifierCarte' : 'ajouterCarte', d, 'Carte enregistrée'); closeSheet(); } catch (e) {} };
 }
 function mRelier(id) {
-  const ca = IX.ca[id], n = D.comptes.filter(c => c.statut === 'Actif' && c.carte === id).length;
+  const ca = IX.ca[id], n = D.types.map(t => courtType(t.type) + ' ' + nbSurCarte(id, t.type) + '/' + D.params.maxCarte).join(' · ');
   const l = D.comptes.filter(c => c.statut === 'Actif' && c.carte !== id).sort((a, b) => (a.carte ? 1 : 0) - (b.carte ? 1 : 0) || a.mail.localeCompare(b.mail));
   if (!l.length) return toast('Tous tes comptes sont déjà sur cette carte.', true);
-  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Ajouter un compte</div><div class="mu" style="margin:4px 0 14px">sur ${esc(ca.repere)} · ${n}/${D.params.maxCarte} compte(s)</div>
-    <div style="max-height:52vh;overflow:auto">${l.map(c => { const autre = IX.ca[c.carte];
-      return `<button class="tap list-item" style="width:100%;background:none;border:0;border-top:1px solid #1d1d1d;color:inherit;text-align:left;cursor:pointer" onclick="relierCompte('${c.id}','${id}')"><div style="flex:1;min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${esc(c.mail)}</div><div class="mu">${esc(c.type)} · ${autre ? 'actuellement sur ' + esc(autre.repere) : '<span style="color:var(--wa)">sans carte</span>'}</div></div><span style="color:var(--g2);font-size:20px">＋</span></button>`; }).join('')}</div>`);
+  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Ajouter un compte</div><div class="mu" style="margin:4px 0 14px">sur ${esc(ca.repere)} · ${n}</div>
+    <div style="max-height:52vh;overflow:auto">${l.map(c => { const autre = IX.ca[c.carte], plein = nbSurCarte(id, c.type) >= D.params.maxCarte;
+      return `<button class="tap list-item" style="width:100%;background:none;border:0;border-top:1px solid #1d1d1d;color:inherit;text-align:left;cursor:pointer;${plein ? 'opacity:.4' : ''}" onclick="${plein ? `toast('Déjà ${D.params.maxCarte} comptes ${esc(courtType(c.type))} sur cette carte', true)` : `relierCompte('${c.id}','${id}')`}"><div style="flex:1;min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${esc(c.mail)}</div><div class="mu">${esc(c.type)} · ${autre ? 'actuellement sur ' + esc(autre.repere) : '<span style="color:var(--wa)">sans carte</span>'}</div></div><span style="color:var(--g2);font-size:20px">＋</span></button>`; }).join('')}</div>`);
 }
 async function relierCompte(cid, caId) {
   const c = IX.cp[cid], avant = c.carte || '';
@@ -1220,7 +1226,7 @@ function detacherCompte(cid, caId) {
 function mRemplacer(id) {
   const ca = IX.ca[id], n = D.comptes.filter(c => c.statut === 'Actif' && c.carte === id).length;
   sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Remplacer ${esc(ca.repere)}</div><div class="mu" style="margin:4px 0 14px">Ses ${n} compte(s) passeront sur la nouvelle carte. L’ancienne reste dans l’historique.</div>
-    <label class="l">Nouvelle carte</label><select id="rc_s" onchange="$('#rc_new').style.display=this.value?'none':'block'"><option value="">➕ Une nouvelle carte</option>${D.cartes.filter(c => c.statut === 'Active' && c.id !== id).map(c => `<option value="${c.id}">${esc(c.repere)} (${D.comptes.filter(x => x.statut === 'Actif' && x.carte === c.id).length}/${D.params.maxCarte})</option>`).join('')}</select>
+    <label class="l">Nouvelle carte</label><select id="rc_s" onchange="$('#rc_new').style.display=this.value?'none':'block'"><option value="">➕ Une nouvelle carte</option>${D.cartes.filter(c => c.statut === 'Active' && c.id !== id).map(c => `<option value="${c.id}">${esc(c.repere)} (${D.comptes.filter(x => x.statut === 'Actif' && x.carte === c.id).length} compte(s))</option>`).join('')}</select>
     <div id="rc_new"><label class="l">Repère</label><input id="rc_r" placeholder="Ex. Visa Ecobank …7788"><label class="l">Titulaire</label><input id="rc_t" value="${esc(ca.titulaire)}"></div>
     <button class="btn full" id="rc_ok">Remplacer</button>`);
   $('#rc_ok').onclick = async () => { const d = { id, nouvelleId: $('#rc_s').value, repere: $('#rc_r').value, titulaire: $('#rc_t').value }; try { await act('remplacerCarte', d, 'Carte remplacée'); closeSheet(); } catch (e) {} };
