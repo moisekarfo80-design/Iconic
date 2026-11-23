@@ -11,7 +11,7 @@
  * ═══════════════════════════════════════════════════════════
  */
 
-const VERSION = '2.3.3';
+const VERSION = '2.3.4';
 const MARQUE = 'ICONIC Collection';
 const TZ = 'Africa/Ouagadougou';
 
@@ -26,7 +26,7 @@ H[S.PARAM]     = ['Clé', 'Valeur', 'Description'];
 H[S.TYPES]     = ['Type', 'Places par défaut', 'Coût mensuel par défaut'];
 H[S.SESSIONS]  = ['Code', 'Type', 'Libellé', 'Durée (mois)', 'Prix'];
 H[S.CARTES]    = ['ID', 'Repère', 'Titulaire', 'Statut', 'Remplacée par', 'Date ajout', 'Notes', 'Supprimée le', 'Statut avant'];
-H[S.COMPTES]   = ['ID', 'Type', 'Mail', 'Mot de passe', 'Nom', 'Téléphone', 'Carte', 'Coût mensuel', 'Places', 'Expiration', 'Statut', 'Créé le', 'Bloqué le'];
+H[S.COMPTES]   = ['ID', 'Type', 'Mail', 'Mot de passe', 'Nom', 'Téléphone', 'Carte', 'Coût mensuel', 'Places', 'Expiration', 'Statut', 'Créé le', 'Bloqué le', 'Lien', 'Adresse'];
 H[S.PLACES]    = ['ID', 'Compte', 'N°', 'Profil', 'Code', 'État', 'Client', 'Abonnement', 'Depuis'];
 H[S.CLIENTS]   = ['ID', 'Nom', 'Numéros', 'Créé le', 'Notes', 'WhatsApp', 'Statut', 'Supprimé le', 'Relancé le'];
 H[S.ABOS]      = ['ID', 'Client', 'Type', 'Session', 'Début', 'Expiration', 'Statut', 'Place', 'Compte', 'Mis à jour', 'Import'];
@@ -37,7 +37,7 @@ H[S.JOURNAL]   = ['Date', 'Niveau', 'Message'];
 
 // Colonnes à garder en texte (zéros au début, numéros…)
 const TEXTE = {};
-TEXTE[S.COMPTES] = ['Mail', 'Mot de passe', 'Téléphone'];
+TEXTE[S.COMPTES] = ['Mail', 'Mot de passe', 'Téléphone', 'Lien', 'Adresse'];
 TEXTE[S.PLACES]  = ['Profil', 'Code'];
 TEXTE[S.CLIENTS] = ['Numéros', 'WhatsApp'];
 TEXTE[S.VENTES]  = ['Numéro', 'Trans ID'];
@@ -426,7 +426,7 @@ function charger_() {
 }
 
 function mapClient_(c) { return { id: c.ID, nom: c.Nom, numeros: numsOf_(c), cree: c['Créé le'], notes: c.Notes, whatsapp: String(c.WhatsApp || ''), statut: c.Statut || 'Actif', supprimeLe: c['Supprimé le'], relanceLe: c['Relancé le'] }; }
-function mapCompte_(c) { return { id: c.ID, type: c.Type, mail: String(c.Mail), mdp: String(c['Mot de passe']), nom: c.Nom, tel: String(c['Téléphone']), carte: c.Carte, cout: Number(c['Coût mensuel']), places: Number(c.Places), expiration: c.Expiration, statut: c.Statut }; }
+function mapCompte_(c) { return { id: c.ID, type: c.Type, lien: String(c.Lien || ''), adresse: String(c.Adresse || ''), mail: String(c.Mail), mdp: String(c['Mot de passe']), nom: c.Nom, tel: String(c['Téléphone']), carte: c.Carte, cout: Number(c['Coût mensuel']), places: Number(c.Places), expiration: c.Expiration, statut: c.Statut }; }
 function mapPlace_(p) { return { id: p.ID, compte: p.Compte, n: Number(p['N°']), profil: String(p.Profil), code: String(p.Code), etat: p['État'], client: p.Client, abo: p.Abonnement, depuis: p.Depuis }; }
 function mapCarte_(c) { return { id: c.ID, repere: String(c['Repère']), titulaire: c.Titulaire, statut: c.Statut, remplacee: c['Remplacée par'], ajout: c['Date ajout'], notes: c.Notes, supprimeeLe: c['Supprimée le'] }; }
 function mapAbo_(a) { return { id: a.ID, client: a.Client, type: a.Type, session: a.Session, debut: a['Début'], expiration: a.Expiration, statut: a.Statut, place: a.Place, compte: a.Compte, imp: a.Import ? infoImport_(a) : null }; }
@@ -653,7 +653,7 @@ function liberer_(d) {
   if (abo.Place) {
     const pl = rows_(S.PLACES).find(function (p) { return p.ID === abo.Place; });
     if (pl && pl.Abonnement === abo.ID) {
-      pl['État'] = 'À préparer'; pl.Client = ''; pl.Abonnement = ''; pl.Depuis = now_();
+      pl['État'] = sansProfil_(pl.Compte) ? 'Libre' : 'À préparer'; pl.Client = ''; pl.Abonnement = ''; pl.Depuis = now_();
       update_(S.PLACES, pl);
       placeId = pl.ID;
       hist_('Place', pl.ID, 'Libérée', client.Nom + ' retiré(e) · ancien profil : ' + pl.Profil);
@@ -722,7 +722,8 @@ function ajouterCompte_(d) {
   const c = {
     'ID': nextId_('CPT'), 'Type': d.type, 'Mail': String(d.mail).trim(), 'Mot de passe': d.mdp || '', 'Nom': d.nom || '',
     'Téléphone': d.tel || '', 'Carte': d.carte || '', 'Coût mensuel': Number(d.cout || t['Coût mensuel par défaut']),
-    'Places': nb, 'Expiration': d.expiration ? day_(new Date(d.expiration)) : '', 'Statut': 'Actif', 'Créé le': now_()
+    'Places': nb, 'Expiration': d.expiration ? day_(new Date(d.expiration)) : '', 'Statut': 'Actif', 'Créé le': now_(),
+    'Lien': String(d.lien || '').trim(), 'Adresse': String(d.adresse || '').trim()
   };
   insert_(S.COMPTES, c);
   const profils = d.profils || [];
@@ -732,11 +733,17 @@ function ajouterCompte_(d) {
   return { id: c.ID };
 }
 
+/** Comptes « Musique » : on rejoint avec un lien et une adresse, sans profil ni code. */
+function sansProfil_(compteId) {
+  const c = rows_(S.COMPTES).find(function (x) { return x.ID === compteId; });
+  return !!c && /musique/i.test(String(c.Type));
+}
+
 function ajouterPlace_(compteId, n, pc) {
-  const ok = pc && String(pc.profil || '').trim() && String(pc.code || '').trim();
+  const ok = (pc && String(pc.profil || '').trim() && String(pc.code || '').trim()) || sansProfil_(compteId);
   insert_(S.PLACES, {
-    'ID': nextId_('PL'), 'Compte': compteId, 'N°': n, 'Profil': ok ? String(pc.profil).trim() : '',
-    'Code': ok ? String(pc.code).trim() : '', 'État': ok ? 'Libre' : 'À préparer', 'Client': '', 'Abonnement': '', 'Depuis': now_()
+    'ID': nextId_('PL'), 'Compte': compteId, 'N°': n, 'Profil': ok && pc ? String(pc.profil || '').trim() : '',
+    'Code': ok && pc ? String(pc.code || '').trim() : '', 'État': ok ? 'Libre' : 'À préparer', 'Client': '', 'Abonnement': '', 'Depuis': now_()
   });
 }
 
@@ -751,7 +758,7 @@ function modifierCompte_(d) {
     if (d.carte) hist_('Carte', d.carte, 'Compte relié', c.Mail);
     c.Carte = d.carte || '';
   }
-  ['mail:Mail', 'mdp:Mot de passe', 'nom:Nom', 'tel:Téléphone'].forEach(function (m) {
+  ['mail:Mail', 'mdp:Mot de passe', 'nom:Nom', 'tel:Téléphone', 'lien:Lien', 'adresse:Adresse'].forEach(function (m) {
     const k = m.split(':');
     if (d[k[0]] !== undefined) c[k[1]] = d[k[0]];
   });
@@ -1648,7 +1655,7 @@ function placerInventaire_(abo, info, placeId) {
 
 function nouvellePlace_(compteId, profil, code, places) {
   const n = places.reduce(function (m, p) { return Math.max(m, Number(p['N°'])); }, 0) + 1;
-  const p = { 'ID': nextId_('PL'), 'Compte': compteId, 'N°': n, 'Profil': profil || '', 'Code': code || '', 'État': 'À préparer', 'Client': '', 'Abonnement': '', 'Depuis': now_() };
+  const p = { 'ID': nextId_('PL'), 'Compte': compteId, 'N°': n, 'Profil': profil || '', 'Code': code || '', 'État': sansProfil_(compteId) ? 'Libre' : 'À préparer', 'Client': '', 'Abonnement': '', 'Depuis': now_() };
   insert_(S.PLACES, p);
   const c = rows_(S.COMPTES).find(function (x) { return x.ID === compteId; });
   if (c) { c.Places = Number(c.Places || 0) + 1; update_(S.COMPTES, c); }
@@ -1676,7 +1683,7 @@ function annulerInventaire_(d) {
   if (abo.Place) {
     const pl = rows_(S.PLACES).find(function (p) { return p.ID === abo.Place; });
     if (pl && pl.Abonnement === abo.ID) {
-      pl.Client = ''; pl.Abonnement = ''; pl['État'] = (pl.Profil && pl.Code) ? 'Libre' : 'À préparer';
+      pl.Client = ''; pl.Abonnement = ''; pl['État'] = ((pl.Profil && pl.Code) || sansProfil_(pl.Compte)) ? 'Libre' : 'À préparer';
       if (info.placeCreee === pl.ID) {
         pl['État'] = 'Supprimée';
         const c = rows_(S.COMPTES).find(function (x) { return x.ID === pl.Compte; });
@@ -2019,9 +2026,19 @@ function miseAJour_(manuel) {
 function apresMiseAJour() {
   ScriptApp.getProjectTriggers().forEach(function (t) { if (t.getHandlerFunction() === 'apresMiseAJour') ScriptApp.deleteTrigger(t); });
   installer();
+  migrerMusique_();
   journal_('INFO', 'Migration ' + VERSION + ' terminée.');
   hist_('Système', '', 'Mise à jour', 'Version ' + VERSION + ' installée');
   try { push_('⬆️ ICONIC mis à jour', 'Version ' + VERSION + ' installée', 'accueil', params_()); } catch (e) {}
+}
+
+/** 2.3.4 : les places Musique « à préparer » deviennent libres (pas de profil ni de code). */
+function migrerMusique_() {
+  const mus = {}; rows_(S.COMPTES).forEach(function (c) { if (/musique/i.test(String(c.Type))) mus[c.ID] = 1; });
+  let n = 0;
+  rows_(S.PLACES).forEach(function (p) { if (mus[p.Compte] && p['État'] === 'À préparer') { p['État'] = 'Libre'; update_(S.PLACES, p); n++; } });
+  if (n) journal_('INFO', n + ' place(s) Musique rendues libres.');
+  return n;
 }
 
 /** En cas de problème : remet la version précédente de l'app (à exécuter dans l'éditeur). */

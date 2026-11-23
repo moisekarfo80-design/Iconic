@@ -85,6 +85,17 @@ nav svg{width:22px;height:22px}
 .grab{width:40px;height:5px;border-radius:5px;background:#333;margin:0 auto 16px}
 .sh-top{position:sticky;top:-12px;z-index:3;background:#111;margin:-12px -20px 2px;padding:12px 20px 2px;touch-action:none}
 .sh-x{position:absolute;right:14px;top:10px;width:38px;height:38px;border-radius:50%;background:#1c1c1c;border:1px solid #2c2c2c;color:#d8d8d8;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.pass{position:relative;display:flex;align-items:stretch;border-radius:20px;background:linear-gradient(120deg,#17130a,#0f0f0f 55%);border:1px solid #3a3115;margin-bottom:10px;overflow:hidden;cursor:pointer;width:100%;color:inherit;text-align:left;padding:0;font:inherit}
+.pass:active{transform:scale(.985)}
+.pass .pl{flex:1;padding:14px 10px 14px 14px;display:flex;gap:12px;align-items:center;min-width:0}
+.pass .pr2{width:92px;border-left:2px dashed #3a3115;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative;flex:none}
+.pass .pr2:before,.pass .pr2:after{content:'';position:absolute;left:-10px;width:18px;height:18px;border-radius:50%;background:var(--bg,#070707);border:1px solid #3a3115}
+.pass .pr2:before{top:-10px}.pass .pr2:after{bottom:-10px}
+.ring{width:54px;height:54px;border-radius:50%;padding:3px;flex:none}
+.ring>div{width:100%;height:100%;border-radius:50%;background:#101010;display:flex;align-items:center;justify-content:center;font-family:Cinzel,serif;font-weight:700;font-size:20px;color:var(--g3,#f6e3a8)}
+.dg{font-family:Cinzel,serif;font-weight:700;font-size:20px;letter-spacing:3px;color:var(--g3,#f6e3a8)}
+.chipst{font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;letter-spacing:.4px}
+.digit{width:50px;height:60px;border-radius:14px;background:#171717;border:1px solid #4a3c14;display:flex;align-items:center;justify-content:center;font-family:Cinzel,serif;font-size:28px;font-weight:700;color:var(--g3,#f6e3a8)}
 .sh-x:active{transform:scale(.92);background:#262626}
 .toast{position:fixed;left:16px;right:16px;top:calc(10px + var(--top));z-index:60;background:#1c1c1c;border:1px solid var(--lg);border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.6);animation:down .3s;max-width:600px;margin:0 auto}
 .toast.err{border-color:var(--red)}
@@ -161,7 +172,7 @@ details summary{cursor:pointer;color:var(--g2);font-size:13.5px;list-style:none}
 
 <script>
 /* ═════════ ICONIC Collection · application v2 ═════════ */
-const APP_VERSION = '2.3.6';
+const APP_VERSION = '2.4.0';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('iconic_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('iconic_' + k, JSON.stringify(v)); } catch (e) {} },
@@ -1026,10 +1037,9 @@ function mMontant(id) {
   };
 }
 function accesWa(a) {
-  const c = IX.cl[a.client], cp = IX.cp[a.compte], p = IX.pl[a.place], s = IX.se[a.session];
-  if (!c || !cp || !p) return '#';
-  const msg = `Bonjour ${c.nom} 👋\nVoici vos accès ${s ? s.libelle : a.type} chez ICONIC Collection :\n\n📧 Mail : ${cp.mail}\n🔑 Mot de passe : ${cp.mdp}\n👤 Profil : ${p.profil}\n🔢 Code : ${p.code}\n\n📅 Valable jusqu'au ${dt(a.expiration)}.\nMerci de ne modifier aucune information du compte 🙏`;
-  return `https://wa.me/${D.params.indicatif}${c.whatsapp || c.numeros[0] || ''}?text=${encodeURIComponent(msg)}`;
+  const c = IX.cl[a.client], p = IX.pl[a.place];
+  if (!c || !p) return '#';
+  return `https://wa.me/${D.params.indicatif}${c.whatsapp || c.numeros[0] || ''}?text=${encodeURIComponent(texteAcces(p.id))}`;
 }
 function mClientEdit(id) {
   const c = IX.cl[id];
@@ -1076,41 +1086,109 @@ function vListeComptes() {
   if (autres.length) x += `<details class="card" style="margin-top:14px"><summary>Comptes fermés ou bloqués (${autres.length})</summary>${autres.map(c => `<div class="sb" style="padding:8px 0;border-top:1px solid #222;margin-top:8px;font-size:13px"><span>${esc(c.mail)}</span>${tagStat(c.statut)}</div>`).join('')}</details>`;
   return x;
 }
+let VOIR_CODES = false;
+const estMusique = c => /musique/i.test(String((c && c.type) || ''));
+function etatPlace(p) {
+  const a = IX.ab[p.abo], dd = a ? daysTo(a.expiration) : null;
+  if (p.etat !== 'Occupée' || !a) return null;
+  if (a.statut === 'Grâce') return { col: 'var(--wa)', bg: 'rgba(240,182,90,.12)', chip: 'GRÂCE', txt: 'grâce · ' + jours(Math.max(0, dd + D.params.grace)), pct: 15, k: 'g' };
+  if (a.statut === 'À retirer' || a.statut === 'Dette') return { col: 'var(--ko)', bg: 'rgba(255,138,128,.12)', chip: 'IMPAYÉ', txt: 'impayé depuis ' + Math.abs(dd) + ' j', pct: 100, k: 'i' };
+  return { col: 'var(--ok)', bg: 'rgba(127,214,163,.12)', chip: 'PAYÉ', txt: dd <= 3 ? 'expire ' + jours(dd) : dd + ' jours restants', pct: Math.max(6, Math.min(100, dd / 30 * 100)), k: 'p' };
+}
 SCREENS.compte = function (id) {
   const c = IX.cp[id]; if (!c) return null;
+  const mus = estMusique(c);
   const bandeau = c.statut !== 'Actif' ? `<div class="card" style="margin-bottom:12px;border-color:rgba(226,87,76,.45);color:var(--ko)">Ce compte est ${esc(String(c.statut).toLowerCase())}.</div>` : '';
   const r = D.business.rentabilite.find(x => x.id === id) || { profit: 0, vides: 0, manque: 0, occupees: 0 };
   const ca = IX.ca[c.carte], d = daysTo(c.expiration);
   const pls = D.places.filter(p => p.compte === id).sort((a, b) => a.n - b.n);
-  const nb = s => pls.filter(p => p.etat === s).length;
-  const placeHtml = p => {
-    const a = IX.ab[p.abo], cl = IX.cl[p.client], dd = a ? daysTo(a.expiration) : null;
-    let cls = '', dot = '', nom = '', info = '';
-    if (p.etat === 'Occupée') { cls = dd != null && dd <= 3 ? 'warn' : ''; dot = `<span class="dot ${dd != null && dd <= 3 ? 'p' : ''}" style="background:${dd != null && dd <= 3 ? 'var(--wa)' : 'var(--g)'}"></span>`; nom = cl ? cl.nom : '?'; info = a ? (dd <= 3 ? 'expire ' + jours(dd) : 'jusqu’au ' + dt(a.expiration)) : ''; }
-    else if (p.etat === 'Libre') { cls = 'free'; dot = '<span class="dot" style="background:#5ee08f"></span>'; nom = 'Libre'; info = 'profil « ' + p.profil + ' » prêt'; }
-    else { cls = 'prep'; dot = '<span class="dot" style="background:none;border:2px solid var(--wa)"></span>'; nom = 'À préparer'; info = 'nouveau profil + code'; }
-    return `<div class="place ${cls}" onclick="${p.etat === 'Occupée' && p.abo ? `mPlaceOcc('${p.id}')` : `mPreparer('${p.id}')`}"><div class="sb"><span class="mu" style="font-size:11px">Place ${p.n}</span>${dot}</div><div style="font-size:15px;font-weight:600;margin-top:10px">${esc(nom)}</div><div class="mu" style="margin-top:2px">${esc(info)}</div></div>`;
+  const seg = pls.map(p => { const e = etatPlace(p); return e ? e.col : (p.etat === 'Libre' ? '#3a3115' : '#2a2a2a'); });
+  const cpt = k => pls.filter(p => (etatPlace(p) || {}).k === k).length;
+  const resume = [cpt('p') + ' payé(s)', cpt('g') ? cpt('g') + ' grâce' : '', cpt('i') ? cpt('i') + ' impayé(s)' : '', pls.filter(p => p.etat === 'Libre').length + ' libre(s)', pls.filter(p => p.etat === 'À préparer').length ? pls.filter(p => p.etat === 'À préparer').length + ' à préparer' : ''].filter(Boolean).join(' · ');
+  const ticket = p => {
+    const e = etatPlace(p), cl = IX.cl[p.client];
+    if (e) return `<button class="pass" onclick="mPass('${p.id}')"><div class="pl"><div class="ring" style="background:conic-gradient(${e.col} 0 ${e.pct}%,#262626 0 100%)"><div>${esc(((cl && cl.nom) || p.profil || '?')[0].toUpperCase())}</div></div>
+      <div style="min-width:0"><div class="row" style="gap:6px"><b style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cl ? cl.nom : '?')}</b><span class="chipst" style="background:${e.bg};color:${e.col}">${e.chip}</span></div>
+      <div class="mu" style="font-size:12px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${mus ? esc((cl && (cl.whatsapp || cl.numeros[0])) || '') : 'profil « ' + esc(p.profil || '—') + ' »'}</div><div style="font-size:11px;margin-top:4px;color:${e.col}">${esc(e.txt)}</div></div></div>
+      <div class="pr2"><span class="mu" style="font-size:9.5px;letter-spacing:1.5px">PLACE ${p.n}</span>${mus ? '<span style="font-size:22px">🎧</span>' : `<span class="dg">${VOIR_CODES ? esc(p.code || '—') : '••••'}</span><span class="mu" style="font-size:9.5px">code</span>`}</div></button>`;
+    if (p.etat === 'Libre') return `<button class="pass" style="border-style:dashed;background:#0d0d0d" onclick="mPass('${p.id}')"><div class="pl"><div class="ring" style="background:#3a3115"><div style="font-family:Montserrat;font-size:24px">＋</div></div>
+      <div><b style="font-size:15px;color:var(--g2)">${mus ? 'Place libre' : esc(p.profil || 'Libre')}</b><div class="mu" style="font-size:12px;margin-top:3px">${mus ? 'prête pour le prochain client' : 'place libre · prête'}</div></div></div>
+      <div class="pr2"><span class="mu" style="font-size:9.5px;letter-spacing:1.5px">PLACE ${p.n}</span>${mus ? '<span style="font-size:22px;opacity:.5">🎧</span>' : `<span class="dg" style="color:#777">${VOIR_CODES ? esc(p.code || '—') : '••••'}</span><span class="mu" style="font-size:9.5px">code</span>`}</div></button>`;
+    return `<button class="pass" style="border:1.5px dashed #3a3a3a;background:#0d0d0d" onclick="mPreparer('${p.id}')"><div class="pl"><div class="ring" style="background:#2a2a2a"><div style="font-family:Montserrat;font-size:20px;color:#888">✎</div></div>
+      <div><b style="font-size:15px;color:#bbb">À préparer</b><div class="mu" style="font-size:12px;margin-top:3px">nouveau profil + code</div></div></div>
+      <div class="pr2"><span class="mu" style="font-size:9.5px;letter-spacing:1.5px">PLACE ${p.n}</span><span class="dg" style="color:#555;letter-spacing:1px">— —</span><span class="mu" style="font-size:9.5px">touche</span></div></button>`;
   };
-  return `${head(esc(c.mail), esc(c.type.toUpperCase()), `<button class="ib" aria-label="Modifier le compte" onclick="mCompte('${id}')">${I('edit')}</button>`, true)}
-  <div style="padding:16px 20px calc(40px + var(--bot))">
+  const copier = (v, lbl) => `<button class="ib" style="width:40px;height:40px;flex:none" aria-label="Copier ${lbl}" onclick="event.stopPropagation();copier(${esc(JSON.stringify(String(v || '')))}, '${lbl} copié')">${I('copy', '#f3dfa2')}</button>`;
+  const ligne = (lbl, val, secret, lien) => `<div class="lbl" style="margin-top:12px;font-size:10.5px;letter-spacing:1.4px;color:#8a8a8a;font-weight:600">${lbl}</div>
+    <div class="row" style="margin-top:6px;gap:8px;align-items:flex-start"><div style="flex:1;min-width:0;background:#0b0b0b;border:1px solid var(--lg);border-radius:14px;padding:11px 13px;font-size:13.5px;line-height:1.45;${lien ? 'color:#8fb4ff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis' : 'white-space:pre-wrap;word-break:break-word'}">${val ? (secret && !VOIR_CODES ? '••••••••' : esc(val)) : '<span class="mu">— à compléter —</span>'}</div>${val ? copier(val, lbl.toLowerCase()) : ''}</div>`;
+  const acces = mus
+    ? `<div class="card anim" style="margin-top:12px;border-color:#4a3c14;background:linear-gradient(160deg,#1c170a,#121212 60%)"><div class="sb"><b style="font-size:14.5px;color:var(--g3)">🎧 Accès pour rejoindre</b><button class="tag" style="cursor:pointer;background:none" onclick="mAccesMusique('${id}')">✎ Modifier</button></div>
+        ${ligne('🔗 LIEN D’INVITATION', c.lien, false, true)}${ligne('📍 ADRESSE', c.adresse)}
+        <div class="mu" style="margin-top:10px;font-size:11.5px">Les mêmes accès pour toutes les places de ce compte.</div></div>`
+    : `<div class="card anim" style="margin-top:12px"><div class="sb"><b style="font-size:14.5px;color:var(--g3)">🔐 Identifiants du compte</b><button class="tag" style="cursor:pointer;background:none" onclick="mCompte('${id}')">✎ Modifier</button></div>
+        ${ligne('MAIL', c.mail)}${ligne('MOT DE PASSE', c.mdp, true)}</div>`;
+  return `${head(esc(c.type.toUpperCase()), '', `<button class="ib" aria-label="Modifier le compte" onclick="mCompte('${id}')">${I('edit')}</button>`)}
+  <div style="padding:12px 20px calc(40px + var(--bot))">
   ${bandeau}
-  <div class="grid2 anim">
-    <div class="card" style="background:linear-gradient(150deg,${r.profit >= 0 ? '#1d2a1f' : '#2a1d1d'},#121212 70%);border-color:${r.profit >= 0 ? 'rgba(79,191,131,.35)' : 'rgba(226,87,76,.35)'}"><div class="mu" style="font-size:11px">Rentabilité / mois</div><div style="font-size:20px;font-weight:600;margin-top:4px;color:${r.profit >= 0 ? 'var(--ok)' : 'var(--ko)'}">${MASK ? '•••••' : (r.profit >= 0 ? '+ ' : '− ') + F(Math.abs(r.profit))}</div>${r.vides || r.impayes ? `<div style="font-size:11px;color:var(--wa);margin-top:6px">${[r.impayes ? r.impayes + ' impayée(s)' : '', r.vides ? r.vides + ' vide(s)' : ''].filter(Boolean).join(' · ')} : −${MASK ? '•••' : F(r.manque)}</div>` : '<div style="font-size:11px;color:var(--ok);margin-top:6px">Complet et tout payé</div>'}</div>
-    <div class="card"><div class="mu" style="font-size:11px">${ca ? esc(ca.repere) : 'Aucune carte'} · ${M(c.cout)}</div><div style="font-size:20px;font-weight:600;margin-top:4px;color:${d != null && d <= 5 ? 'var(--wa)' : 'var(--tx)'}">${d == null ? '—' : jours(d)}</div><div class="bar" style="margin-top:10px"><i data-w="${d == null ? 0 : Math.max(4, Math.min(100, 100 - d / 30 * 100))}%" style="background:${d != null && d <= 5 ? 'var(--wa)' : 'var(--g)'}"></i></div></div>
+  <div class="card anim" style="padding:14px 16px">
+    <b style="font-size:16px;display:block;overflow:hidden;text-overflow:ellipsis">${esc(c.mail)}</b>
+    <div class="row" style="gap:5px;margin-top:10px">${seg.map(col => `<i style="flex:1;height:8px;border-radius:4px;background:${col}"></i>`).join('')}</div>
+    <div class="mu" style="margin-top:8px;font-size:11.5px">${resume}</div>
+    <div class="row" style="gap:8px;margin-top:12px;flex-wrap:wrap">
+      ${ca ? `<button class="tag" style="cursor:pointer;background:none;color:var(--g2);border-color:var(--lg);padding:7px 12px" onclick="push('carte',['${ca.id}'])">💳 ${esc(ca.repere)} ›</button>` : `<button class="tag t-wa" style="cursor:pointer;background:none;padding:7px 12px" onclick="mCompte('${id}')">💳 Ajouter une carte</button>`}
+      <span class="tag" style="padding:7px 12px">${M(c.cout)} / mois</span>
+      <span class="tag ${d != null && d <= 5 ? 't-wa' : ''}" style="padding:7px 12px">⏳ ${d == null ? 'date ?' : jours(d)}</span>
+    </div>
   </div>
-  <div class="sb" style="margin:22px 0 10px"><span class="serif" style="color:var(--g2);font-size:16px;letter-spacing:1px">Plan des places</span><span class="mu">${nb('Occupée')} occ. · ${nb('Libre')} libre · ${nb('À préparer')} à prép.</span></div>
-  <div class="grid2">${pls.map(placeHtml).join('')}</div>
-  <details class="card" style="margin-top:14px"><summary>Accès du compte</summary><div class="acces" style="margin-top:10px"><div>Mail : ${esc(c.mail)}</div><div>Mot de passe : ${esc(c.mdp || '—')}</div>${c.nom || c.tel ? `<div>Titulaire : ${esc(c.nom)} ${esc(c.tel)}</div>` : ''}</div></details>
-  <div class="row" style="margin-top:20px"><button class="btn full" style="flex:1" onclick="mPayer('${id}')">Marquer payé</button><button class="btn redo" style="min-height:52px;border-radius:16px" onclick="mBloquer('${id}')">${I('ban', '#ff8a80').replace('<svg', '<svg width="18" height="18"')} Bloqué</button></div>
+  <div class="card anim" style="margin-top:10px;padding:12px 16px;background:linear-gradient(150deg,${r.profit >= 0 ? '#1d2a1f' : '#2a1d1d'},#121212 70%);border-color:${r.profit >= 0 ? 'rgba(79,191,131,.35)' : 'rgba(226,87,76,.35)'}"><div class="sb"><span class="mu" style="font-size:11.5px">Rentabilité / mois</span><b style="color:${r.profit >= 0 ? 'var(--ok)' : 'var(--ko)'}">${MASK ? '•••••' : (r.profit >= 0 ? '+ ' : '− ') + F(Math.abs(r.profit))}</b></div>${r.vides || r.impayes ? `<div style="font-size:11px;color:var(--wa);margin-top:4px">${[r.impayes ? r.impayes + ' impayée(s)' : '', r.vides ? r.vides + ' vide(s)' : ''].filter(Boolean).join(' · ')} : −${MASK ? '•••' : F(r.manque)}</div>` : ''}</div>
+  ${acces}
+  <div class="sb" style="margin:20px 0 10px"><span class="lbl" style="font-size:10.5px;letter-spacing:1.4px;color:#8a8a8a;font-weight:600">${mus ? 'PLACES' : 'PROFILS'}</span>${mus ? '' : `<button class="tag" style="cursor:pointer;background:none" onclick="VOIR_CODES=!VOIR_CODES;renderOverlay()">👁 ${VOIR_CODES ? 'Masquer' : 'Afficher'} les codes</button>`}</div>
+  ${pls.map(ticket).join('')}
+  <div class="row" style="margin-top:16px"><button class="btn full" style="flex:1" onclick="mPayer('${id}')">Marquer payé</button><button class="btn redo" style="min-height:52px;border-radius:16px" onclick="mBloquer('${id}')">${I('ban', '#ff8a80').replace('<svg', '<svg width="18" height="18"')} Bloqué</button></div>
   <button class="btn ghost full" style="margin-top:10px" onclick="mFermer('${id}')">Fermer ce compte</button>
   </div>`;
 };
-function mPlaceOcc(pid) {
-  const p = IX.pl[pid], a = IX.ab[p.abo], c = IX.cl[p.client];
-  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Place ${p.n} · ${esc(c ? c.nom : '')}</div><div class="mu" style="margin:4px 0 14px">Profil « ${esc(p.profil)} » · code ${esc(p.code)} · jusqu’au ${dt(a && a.expiration)}</div>
-    <button class="btn full" onclick="closeSheet();push('client',['${p.client}'])">Voir la fiche client</button>
-    <button class="btn sec full" style="margin-top:8px" onclick="closeSheet();mPreparer('${pid}')">Modifier profil / code</button>
-    <button class="btn redo full" style="margin-top:8px" onclick="closeSheet();mLiberer('${p.abo}')">Retirer ce client</button>`);
+
+function mPlaceOcc(pid) { mPass(pid); }
+function mPass(pid) {
+  const p = IX.pl[pid]; if (!p) return;
+  const cp = IX.cp[p.compte] || {}, mus = estMusique(cp), a = IX.ab[p.abo], cl = IX.cl[p.client], e = etatPlace(p);
+  const occ = p.etat === 'Occupée' && a;
+  const corps = mus
+    ? `<div class="lbl" style="font-size:10.5px;letter-spacing:1.4px;color:#8a8a8a;font-weight:600">🔗 LIEN POUR REJOINDRE</div><div style="margin-top:4px;color:#8fb4ff;word-break:break-all;font-size:13.5px">${esc(cp.lien || '— à compléter —')}</div>
+       <div class="lbl" style="margin-top:14px;font-size:10.5px;letter-spacing:1.4px;color:#8a8a8a;font-weight:600">📍 ADRESSE</div><div style="margin-top:4px;font-size:13.5px;white-space:pre-wrap">${esc(cp.adresse || '— à compléter —')}</div>`
+    : `<div class="lbl" style="font-size:10.5px;letter-spacing:1.4px;color:#8a8a8a;font-weight:600">COMPTE</div><div style="font-weight:700;margin-top:4px;word-break:break-all">${esc(cp.mail)}</div>
+       <div class="sb" style="margin-top:14px;align-items:flex-start"><div><div class="lbl" style="font-size:10.5px;letter-spacing:1.4px;color:#8a8a8a;font-weight:600">MOT DE PASSE</div><div style="font-weight:700;margin-top:4px">${esc(cp.mdp || '—')}</div></div>${occ ? `<div style="text-align:right"><div class="lbl" style="font-size:10.5px;letter-spacing:1.4px;color:#8a8a8a;font-weight:600">VALABLE JUSQU’AU</div><div style="font-weight:700;margin-top:4px;color:${e ? e.col : 'var(--ok)'}">${dt(a.expiration)}</div></div>` : ''}</div>
+       <div style="border-top:2px dashed #2c2c2c;margin:16px -20px 14px"></div>
+       <div class="lbl" style="text-align:center;font-size:10.5px;letter-spacing:1.4px;color:#8a8a8a;font-weight:600">CODE DU PROFIL « ${esc(p.profil || '—')} »</div>
+       <div class="row" style="justify-content:center;gap:8px;margin-top:10px">${String(p.code || '—').split('').slice(0, 8).map(d => `<span class="digit">${esc(d)}</span>`).join('')}</div>`;
+  sheet(`<div style="border-radius:24px;overflow:hidden;border:1px solid #6b5520;margin-top:4px">
+      <div style="padding:18px 20px 16px;background:linear-gradient(140deg,#f6e3a8,#c9a24a 60%,#8a6a22);color:#1a1205">
+        <div class="sb"><span class="serif" style="font-size:11px;letter-spacing:3px;font-weight:700">ICONIC COLLECTION</span><span style="font-size:10.5px;font-weight:700">${esc(String(cp.type || '').toUpperCase())}</span></div>
+        <div class="serif" style="font-size:28px;margin-top:12px;font-weight:700">${esc(occ && cl ? cl.nom : 'Place ' + p.n)}</div>
+        <div style="font-size:12px;font-weight:600;opacity:.8">Place ${p.n}${!mus && p.profil ? ' · profil « ' + esc(p.profil) + ' »' : ''}${!occ ? ' · libre' : ''}</div></div>
+      <div style="background:#0f0f0f;padding:18px 20px">${corps}</div></div>
+    ${occ && cl ? `<a class="btn wa full" style="margin-top:14px;text-decoration:none" href="${accesWa(a)}" target="_blank">Envoyer ses accès sur WhatsApp</a>` : ''}
+    <div class="row" style="gap:8px;margin-top:8px">
+      <button class="btn sec" style="flex:1" onclick="copier(texteAcces('${pid}'),'Accès copiés')">📋 Copier</button>
+      ${mus ? `<button class="btn sec" style="flex:1" onclick="closeSheet();mAccesMusique('${cp.id}')">✎ Modifier</button>` : `<button class="btn sec" style="flex:1" onclick="closeSheet();mPreparer('${pid}')">✎ Modifier</button>`}
+      ${occ ? `<button class="btn sec" style="flex:1" onclick="closeSheet();push('client',['${p.client}'])">👤 Client</button>` : ''}
+    </div>
+    ${occ ? `<button class="btn redo full" style="margin-top:8px" onclick="closeSheet();mLiberer('${p.abo}')">Retirer ${esc(cl ? cl.nom : 'ce client')}</button>` : ''}`);
+}
+function copier(txt, msg) {
+  const ok = () => toast(msg || 'Copié');
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, () => { fallbackCopie(txt); ok(); });
+  else { fallbackCopie(txt); ok(); }
+}
+function fallbackCopie(t) { const x = document.createElement('textarea'); x.value = t; x.style.position = 'fixed'; x.style.opacity = '0'; document.body.appendChild(x); x.select(); try { document.execCommand('copy'); } catch (e) {} x.remove(); }
+/** Texte des accès d'une place (Musique : lien + adresse ; sinon : mail, mot de passe, profil, code). */
+function texteAcces(pid, nom) {
+  const p = IX.pl[pid], cp = IX.cp[p.compte] || {}, a = IX.ab[p.abo], cl = IX.cl[p.client];
+  const qui = nom || (cl ? cl.nom : '');
+  const fin = a ? `\n\n✅ Valable jusqu'au ${dt(a.expiration)}.` : '';
+  if (estMusique(cp)) return `Bonjour ${qui} 👋\nVoici tes accès Musique et podcasts ICONIC Collection :\n\n🔗 Lien pour rejoindre :\n${cp.lien || '(à venir)'}\n\n📍 Adresse à indiquer :\n${cp.adresse || '(à venir)'}\n\n1️⃣ Ouvre le lien et connecte-toi avec ton propre compte\n2️⃣ Quand on te demande l'adresse, copie celle ci-dessus${fin}\nMerci pour ta confiance 🙏`;
+  return `Bonjour ${qui} 👋\nVoici vos accès ${cp.type || ''} chez ICONIC Collection :\n\n📧 Mail : ${cp.mail}\n🔑 Mot de passe : ${cp.mdp}\n👤 Profil : ${p.profil}\n🔢 Code : ${p.code}${fin}\nMerci de ne modifier aucune information du compte 🙏`;
 }
 // Limite : maxCarte comptes DE CHAQUE TYPE par carte (3 Films + 3 Musique + 3 PRM)
 const nbSurCarte = (caId, type, exclu) => D.comptes.filter(c => c.statut === 'Actif' && c.carte === caId && c.type === type && c.id !== exclu).length;
@@ -1131,22 +1209,99 @@ function mCompte(id) {
     <label class="l">Carte (max ${D.params.maxCarte} comptes de chaque type par carte)</label><select id="fc_carte">${carteOptions(c ? c.carte : '', c ? c.id : '', c ? c.type : t0.type)}</select>
     <div class="grid2"><div><label class="l">Coût mensuel (F)</label><input id="fc_cout" inputmode="numeric" value="${c ? c.cout : t0.cout}"></div><div><label class="l">Nombre de places</label><input id="fc_pl" inputmode="numeric" value="${c ? c.places : t0.places}" oninput="fcProfils()"></div></div>
     <label class="l">Date d'expiration de l'abonnement</label><input id="fc_exp" type="date" value="${c ? isoDay(c.expiration) : ''}">
-    ${c ? '' : `<label class="l">Profils et codes (tu peux les compléter plus tard)</label><div id="fc_profils"></div>`}
+    <div id="fc_mus" style="display:${estMusique(c || { type: t0.type }) ? 'block' : 'none'}">
+      <div class="sb" style="margin-top:6px"><label class="l" style="margin:0">Lien d'invitation</label><button class="tag" style="cursor:pointer;background:none" onclick="coller('fc_lien')">📋 Coller</button></div>
+      <input id="fc_lien" autocapitalize="off" inputmode="url" placeholder="https://…" style="margin-top:6px" value="${c ? esc(c.lien) : ''}">
+      <div class="sb"><label class="l" style="margin:0">Adresse</label><button class="tag" style="cursor:pointer;background:none" onclick="coller('fc_adr')">📋 Coller</button></div>
+      <textarea id="fc_adr" rows="3" style="margin-top:6px;width:100%" placeholder="Secteur, rue, porte, ville">${c ? esc(c.adresse) : ''}</textarea>
+      <div class="mu" style="margin:6px 0 4px">Pour la musique : pas de profil ni de code. Les places sont prêtes tout de suite.</div>
+    </div>
+    ${c ? '' : `<div id="fc_prwrap" style="display:${estMusique({ type: t0.type }) ? 'none' : 'block'}"><label class="l">Profils et codes (tu peux les compléter plus tard)</label><div id="fc_profils"></div></div>`}
     <button class="btn full" onclick="saveCompte('${id || ''}')">Enregistrer</button>
     <button class="btn ghost full" style="margin-top:8px" onclick="closeSheet()">Annuler</button>`);
   if (!c) fcProfils();
 }
-function fcType() { const t = D.types.find(x => x.type === $('#fc_type').value); if (t) { $('#fc_cout').value = t.cout; $('#fc_pl').value = t.places; fcProfils(); const s = $('#fc_carte'), v = s.value; s.innerHTML = carteOptions(v, '', t.type); if (s.selectedOptions[0] && s.selectedOptions[0].disabled) s.value = ''; } }
+function fcType() { const t = D.types.find(x => x.type === $('#fc_type').value); if (t) { const m = estMusique(t); $('#fc_mus').style.display = m ? 'block' : 'none'; $('#fc_prwrap').style.display = m ? 'none' : 'block'; $('#fc_cout').value = t.cout; $('#fc_pl').value = t.places; fcProfils(); const s = $('#fc_carte'), v = s.value; s.innerHTML = carteOptions(v, '', t.type); if (s.selectedOptions[0] && s.selectedOptions[0].disabled) s.value = ''; } }
 function fcProfils() {
   const el = $('#fc_profils'); if (!el) return;
   const n = Math.min(Number($('#fc_pl').value) || 0, 12), old = [...el.querySelectorAll('.pr')].map(r => [r.children[0].value, r.children[1].value]);
   el.innerHTML = Array.from({ length: n }, (_, i) => `<div class="grid2 pr"><input placeholder="Profil ${i + 1}" value="${esc((old[i] || [])[0] || '')}"><input placeholder="Code ${i + 1}" inputmode="numeric" value="${esc((old[i] || [])[1] || '')}"></div>`).join('');
 }
+async function coller(champ) {
+  try { const t = await navigator.clipboard.readText(); if (t) { $('#' + champ).value = t.trim(); toast('Collé'); } else toast('Rien à coller', true); }
+  catch (e) { $('#' + champ).focus(); toast('Appui long dans la case → Coller', true); }
+}
 async function saveCompte(id) {
-  const d = { mail: $('#fc_mail').value, mdp: $('#fc_mdp').value, nom: $('#fc_nom').value, tel: $('#fc_tel').value, carte: $('#fc_carte').value, cout: $('#fc_cout').value, places: $('#fc_pl').value, expiration: $('#fc_exp').value };
+  const d = { mail: $('#fc_mail').value, mdp: $('#fc_mdp').value, nom: $('#fc_nom').value, tel: $('#fc_tel').value, carte: $('#fc_carte').value, cout: $('#fc_cout').value, places: $('#fc_pl').value, expiration: $('#fc_exp').value,
+    lien: $('#fc_lien') ? $('#fc_lien').value.trim() : undefined, adresse: $('#fc_adr') ? $('#fc_adr').value.trim() : undefined };
   if (!d.mail.trim()) return toast('Le mail est obligatoire.', true);
-  if (id) d.id = id; else { d.type = $('#fc_type').value; d.profils = [...document.querySelectorAll('#fc_profils .pr')].map(r => ({ profil: r.children[0].value, code: r.children[1].value })); }
-  try { await act(id ? 'modifierCompte' : 'ajouterCompte', d, id ? 'Compte mis à jour' : 'Compte ajouté'); closeSheet(); } catch (e) {}
+  const avant = id ? Object.assign({}, IX.cp[id]) : null;
+  if (id) d.id = id; else { d.type = $('#fc_type').value; d.profils = estMusique({ type: d.type }) ? [] : [...document.querySelectorAll('#fc_profils .pr')].map(r => ({ profil: r.children[0].value, code: r.children[1].value })); }
+  try {
+    await act(id ? 'modifierCompte' : 'ajouterCompte', d, id ? 'Compte mis à jour' : 'Compte ajouté'); closeSheet();
+    if (avant) proposerPrevenir(id, avant, d);
+  } catch (e) {}
+}
+function mAccesMusique(id) {
+  const c = IX.cp[id]; if (!c) return;
+  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Accès du compte musique</div><div class="mu" style="margin:4px 0 14px">${esc(c.mail)}</div>
+    <div class="sb"><label class="l" style="margin:0">Lien d'invitation</label><button class="tag" style="cursor:pointer;background:none" onclick="coller('am_l')">📋 Coller</button></div>
+    <input id="am_l" autocapitalize="off" inputmode="url" placeholder="https://…" style="margin-top:6px" value="${esc(c.lien)}">
+    <div class="sb"><label class="l" style="margin:0">Adresse</label><button class="tag" style="cursor:pointer;background:none" onclick="coller('am_a')">📋 Coller</button></div>
+    <textarea id="am_a" rows="3" style="margin-top:6px;width:100%" placeholder="Secteur, rue, porte, ville">${esc(c.adresse)}</textarea>
+    <button class="btn full" style="margin-top:14px" id="am_ok">Enregistrer</button>
+    <button class="btn ghost full" style="margin-top:8px" onclick="closeSheet()">Annuler</button>`);
+  $('#am_ok').onclick = async () => {
+    const avant = Object.assign({}, c), d = { id, lien: $('#am_l').value.trim(), adresse: $('#am_a').value.trim() };
+    try { await act('modifierCompte', d, 'Accès mis à jour'); closeSheet(); proposerPrevenir(id, avant, d); } catch (e) {}
+  };
+}
+/* ── Prévenir les clients après un changement d'identifiants ── */
+function proposerPrevenir(id, avant, d) {
+  const chg = [];
+  if (d.mail !== undefined && d.mail.trim() !== avant.mail) chg.push('mail');
+  if (d.mdp !== undefined && d.mdp !== avant.mdp) chg.push('mdp');
+  if (d.lien !== undefined && d.lien !== (avant.lien || '')) chg.push('lien');
+  if (d.adresse !== undefined && d.adresse !== (avant.adresse || '')) chg.push('adresse');
+  if (!chg.length) return;
+  const cls = clientsDuCompte(id); if (!cls.length) return;
+  const quoi = { mail: 'le mail', mdp: 'le mot de passe', lien: 'le lien', adresse: 'l’adresse' };
+  setTimeout(() => confirmer({ titre: 'Prévenir tes clients ?', icon: 'users', ok: 'Oui, choisir les clients', non: 'Non merci',
+    texte: `Tu as changé <b>${chg.map(k => quoi[k]).join(' et ')}</b>. Les <b>${cls.length}</b> client(s) de ce compte ne pourront peut-être plus se connecter.`,
+    action: () => mPrevenir(id, chg) }), 500);
+}
+function clientsDuCompte(id) {
+  return D.places.filter(p => p.compte === id && p.etat === 'Occupée' && p.client && IX.cl[p.client])
+    .map(p => ({ p, c: IX.cl[p.client], a: IX.ab[p.abo] })).filter(x => x.a && EC.includes(x.a.statut));
+}
+let PREV = {};
+function mPrevenir(id, chg) {
+  const cls = clientsDuCompte(id);
+  PREV = { id, chg, sel: {}, envoye: {} };
+  const ligne = x => { const e = etatPlace(x.p) || {}; const num = x.c.whatsapp || x.c.numeros[0];
+    return `<label class="list-item" style="cursor:pointer;gap:12px;${num ? '' : 'opacity:.45'}"><input type="checkbox" style="width:22px;height:22px;flex:none;margin:0;accent-color:#d4af37" ${num ? '' : 'disabled'} onchange="PREV.sel['${x.c.id}']=this.checked;prevCompte()">
+      <div style="flex:1;min-width:0"><b>${esc(x.c.nom)}</b><div class="mu" style="font-size:11.5px">${num ? 'WhatsApp ' + esc(num) : 'pas de numéro'} · place ${x.p.n}</div></div><span class="chipst" style="background:${e.bg || '#222'};color:${e.col || '#aaa'}">${e.chip || ''}</span></label>`; };
+  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Qui prévenir ?</div><div class="mu" style="margin:4px 0 10px">Coche les clients à qui envoyer les nouveaux accès.</div>
+    <div class="row" style="gap:8px;margin-bottom:6px"><button class="tag" style="cursor:pointer;background:none" onclick="prevTout(true)">Tout cocher</button><button class="tag" style="cursor:pointer;background:none" onclick="prevTout(false)">Tout décocher</button></div>
+    <div id="pv_l" style="max-height:48vh;overflow:auto">${cls.map(ligne).join('')}</div>
+    <button class="btn full" style="margin-top:14px" id="pv_ok" disabled onclick="prevEnvoi()">Choisis au moins un client</button>
+    <button class="btn ghost full" style="margin-top:8px" onclick="closeSheet()">Annuler</button>`);
+}
+function prevTout(v) { document.querySelectorAll('#pv_l input:not([disabled])').forEach(i => { i.checked = v; i.onchange(); }); }
+function prevCompte() { const n = Object.values(PREV.sel).filter(Boolean).length, b = $('#pv_ok'); b.disabled = !n; b.textContent = n ? `Envoyer à ${n} client(s)` : 'Choisis au moins un client'; }
+function messageChangement(x, chg) {
+  const cp = IX.cp[PREV.id] || {};
+  if (estMusique(cp)) return `Bonjour ${x.c.nom} 👋\nLes accès de ton abonnement Musique et podcasts ICONIC ont changé :\n\n🔗 Nouveau lien :\n${cp.lien || '—'}\n\n📍 Adresse à indiquer :\n${cp.adresse || '—'}\n\nMerci 🙏`;
+  return `Bonjour ${x.c.nom} 👋\nLes accès de ton abonnement ${cp.type} ICONIC ont changé :\n\n📧 Mail : ${cp.mail}\n🔑 Mot de passe : ${cp.mdp}\n👤 Profil : ${x.p.profil}\n🔢 Code : ${x.p.code}\n\nReconnecte-toi avec ces informations. Merci 🙏`;
+}
+function prevEnvoi() {
+  const l = clientsDuCompte(PREV.id).filter(x => PREV.sel[x.c.id]);
+  const rendu = () => sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Envoyer les messages</div><div class="mu" style="margin:4px 0 12px">Touche chaque bouton : WhatsApp s'ouvre avec le message prêt, tu n'as plus qu'à l'envoyer.</div>
+    ${l.map(x => { const ok = PREV.envoye[x.c.id], num = x.c.whatsapp || x.c.numeros[0];
+      return `<div class="list-item" style="gap:12px"><div style="flex:1;min-width:0"><b>${esc(x.c.nom)}</b><div class="mu" style="font-size:11.5px">${esc(num)}</div></div>
+        <a class="btn sm ${ok ? 'sec' : 'wa'}" style="width:auto;padding:0 14px;text-decoration:none" target="_blank" href="https://wa.me/${D.params.indicatif}${num}?text=${encodeURIComponent(messageChangement(x, PREV.chg))}" onclick="PREV.envoye['${x.c.id}']=1;setTimeout(()=>window._pvR(),400)">${ok ? '✓ Envoyé' : 'WhatsApp'}</a></div>`; }).join('')}
+    <button class="btn full" style="margin-top:14px" onclick="closeSheet()">${Object.keys(PREV.envoye).length >= l.length ? 'Terminé ✨' : 'Fermer'}</button>`);
+  window._pvR = rendu; rendu();
 }
 function mFermer(id) {
   const c = IX.cp[id];
@@ -1170,7 +1325,11 @@ SCREENS.deplaces = function (l) {
   <div style="padding:16px 20px calc(40px + var(--bot))">${l.map(r => `<div class="card anim" style="margin-bottom:8px"><div class="sb"><b>${esc(r.client)}</b>${r.acces ? '<span class="tag t-ok">Déplacé</span>' : '<span class="tag t-bl">En attente</span>'}</div><div class="mu" style="margin-top:4px">${esc(r.info)}</div>${r.whatsapp ? `<a class="btn sm wa" style="margin-top:10px" href="${r.whatsapp}" target="_blank" rel="noopener">Envoyer les nouveaux accès</a>` : ''}</div>`).join('')}
   <button class="btn ghost full" style="margin-top:12px" onclick="back()">Terminé</button></div>`;
 };
-function vListeCartes() {
+SCREENS.carte = function (id) {
+  const ca = IX.ca[id]; if (!ca) return null;
+  return `${head(esc(ca.repere), esc(ca.titulaire || 'Carte'))}<div style="padding:16px 20px calc(40px + var(--bot))">${vListeCartes(id)}</div>`;
+};
+function vListeCartes(seule) {
   const actives = D.cartes.filter(c => c.statut === 'Active'), autres = D.cartes.filter(c => !['Active', 'Supprimée'].includes(c.statut));
   const carte = (ca, i) => {
     const cps = D.comptes.filter(c => c.statut === 'Actif' && c.carte === ca.id);
@@ -1184,6 +1343,7 @@ function vListeCartes() {
       ${ca.statut === 'Active' && !plein ? `<button class="btn sm sec full" style="margin-top:10px;border-style:dashed" onclick="mRelier('${ca.id}')">＋ Ajouter un compte à cette carte</button>` : ''}
       ${ca.statut === 'Active' ? `<div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="btn sm sec" onclick="mCarte('${ca.id}')">Modifier</button><button class="btn sm" onclick="mRemplacer('${ca.id}')">Remplacer</button>${cps.length ? '' : `<button class="btn sm redo" onclick="mSupprimerCarte('${ca.id}')">Supprimer</button>`}</div>` : ''}</div>`;
   };
+  if (seule) { const ca = IX.ca[seule]; return ca ? carte(ca, 0) : ''; }
   return `<div class="grid2 anim" style="margin-top:14px"><div class="card"><div style="font-size:22px;font-weight:600;color:var(--g3)">${actives.length}</div><div class="mu">cartes actives</div></div><div class="card"><div style="font-size:22px;font-weight:600;color:var(--g3)">${D.comptes.filter(c => c.statut === 'Actif' && c.carte).length}</div><div class="mu">comptes reliés</div></div></div>
   <h2>Cartes actives</h2>${actives.map(carte).join('') || '<div class="empty">Aucune carte.</div>'}
   ${autres.length ? `<details class="card" style="margin-top:6px"><summary>Anciennes cartes (${autres.length})</summary><div style="margin-top:10px">${autres.map(carte).join('')}</div></details>` : ''}
