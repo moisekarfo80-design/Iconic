@@ -172,7 +172,7 @@ details summary{cursor:pointer;color:var(--g2);font-size:13.5px;list-style:none}
 
 <script>
 /* ═════════ ICONIC Collection · application v2 ═════════ */
-const APP_VERSION = '2.4.0';
+const APP_VERSION = '2.4.1';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('iconic_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('iconic_' + k, JSON.stringify(v)); } catch (e) {} },
@@ -1486,6 +1486,7 @@ SCREENS.reglages = function () {
   return `${head('Réglages')}<div style="padding:16px 20px calc(40px + var(--bot))">
   <label class="l">Ton prénom (affiché sur l'accueil)</label><input value="${esc(LS.get('prenom', ''))}" placeholder="Ex. Moïse" onchange="LS.set('prenom',this.value.trim());render()">
   ${it('bell', 'Notifications de l’app', !D.notif.appId ? 'À configurer : voir le guide (OneSignal)' : notifOk ? 'Activées sur cet iPhone' : 'Touche pour les activer', 'activerNotifs()', notifOk ? '<span class="tag t-ok">Oui</span>' : '')}
+  ${it('check', 'Vérifier les notifications', 'Trouve ce qui bloque, étape par étape', 'diagNotifs()')}
   ${it('gear', 'Réglages du système', 'Notifications, validation auto, délais, numéro de dépôt', "push('parametres')")}
   ${it('lock', 'Changer mon code', 'Code à 4 chiffres demandé à l’ouverture', 'changerCode()')}
   ${window.PublicKeyCredential ? it('face', 'Face ID', fid ? 'Activé : déverrouillage sans code' : 'Déverrouiller avec ton visage', 'toggleFaceId()', fid ? '<span class="tag t-ok">Oui</span>' : '') : ''}
@@ -1548,11 +1549,54 @@ function chargerOneSignal() {
     const s = document.createElement('script'); s.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js'; s.defer = true; document.head.appendChild(s);
   });
 }
+/* ── Diagnostic : vérifie chaque maillon, de l'iPhone jusqu'à OneSignal ── */
+async function diagNotifs() {
+  const L = [], ajout = (ok, titre, detail, action) => L.push({ ok, titre, detail, action });
+  const rendu = (fin) => sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Vérifier les notifications</div><div class="mu" style="margin:4px 0 12px">${fin ? 'Résultat de la vérification :' : 'Vérification en cours…'}</div>
+    ${L.map(x => `<div class="row" style="gap:12px;align-items:flex-start;padding:10px 0;border-top:1px solid #1d1d1d"><span style="font-size:18px;width:22px;flex:none">${x.ok === true ? '✅' : x.ok === false ? '❌' : '⚠️'}</span><div style="flex:1;min-width:0"><b style="font-size:14px">${x.titre}</b>${x.detail ? `<div class="mu" style="font-size:12px;line-height:1.45;margin-top:2px;word-break:break-word">${x.detail}</div>` : ''}${x.action || ''}</div></div>`).join('')}
+    ${fin ? `<button class="btn full" style="margin-top:14px" onclick="closeSheet()">Fermer</button>` : ''}`);
+  rendu(false);
+  const standalone = navigator.standalone || matchMedia('(display-mode: standalone)').matches;
+  ajout(standalone, 'App ouverte depuis l’écran d’accueil', standalone ? '' : 'Sur iPhone, les notifications ne marchent que dans l’app installée. Ouvre ICONIC depuis son icône, pas depuis Safari.');
+  const support = 'PushManager' in window && 'serviceWorker' in navigator && 'Notification' in window;
+  const ios = (navigator.userAgent.match(/OS (\d+)_(\d+)/) || []).slice(1).join('.');
+  ajout(support, 'iPhone compatible', support ? (ios ? 'iOS ' + ios : '') : 'Il faut iOS 16.4 ou plus récent (Réglages → Général → Mise à jour logicielle).' + (ios ? ' Ton iPhone : iOS ' + ios + '.' : ''));
+  ajout(!!D.notif.appId, 'App ID OneSignal enregistré', D.notif.appId ? esc(D.notif.appId) : 'À coller dans Réglages du système.');
+  rendu(false);
+  if (!support || !D.notif.appId) return rendu(true);
+  let os = false;
+  try { os = await Promise.race([chargerOneSignal().then(() => !!window._OS), new Promise(r => setTimeout(() => r(false), 12000))]); } catch (e) {}
+  ajout(os, 'Service OneSignal chargé', os ? '' : 'OneSignal refuse de démarrer. Dans OneSignal → Settings → Push & In-App → Web, vérifie que <b>Site URL</b> est exactement <b>' + esc(location.origin) + '</b>.');
+  const perm = window.Notification ? Notification.permission : 'absent';
+  ajout(perm === 'granted' ? true : perm === 'denied' ? false : null, 'Autorisation de l’iPhone',
+    perm === 'granted' ? 'Accordée' : perm === 'denied' ? 'Refusée. Va dans Réglages de l’iPhone → Notifications → ICONIC → Autoriser.' : 'Pas encore demandée.',
+    perm === 'default' ? `<button class="btn sm full" style="margin-top:8px" onclick="activerNotifs().then(()=>setTimeout(diagNotifs,1500))">Autoriser maintenant</button>` : '');
+  if (os && window._OS) {
+    const sub = window._OS.User && window._OS.User.PushSubscription;
+    const sid = sub && sub.id, opt = sub && sub.optedIn;
+    ajout(!!(sid && opt), 'Cet iPhone est abonné chez OneSignal', sid ? (opt ? 'Abonnement ' + esc(String(sid).slice(0, 8)) + '…' : 'Abonnement en pause.') : 'Pas encore abonné.',
+      sid && opt ? '' : `<button class="btn sm full" style="margin-top:8px" onclick="(async()=>{try{await window._OS.User.PushSubscription.optIn()}catch(e){}; setTimeout(diagNotifs,2000)})()">Abonner cet iPhone</button>`);
+  }
+  rendu(false);
+  try {
+    const r = await call('testNotif');
+    if (r && r.code !== undefined) {
+      const e = r.erreurs ? JSON.stringify(r.erreurs) : '';
+      const pasAbonne = /All included players are not subscribed|not subscribed/i.test(e + r.brut);
+      ajout(r.ok, 'Envoi depuis ton script Google',
+        r.ok ? 'Notification envoyée. Elle doit arriver dans quelques secondes (verrouille l’écran pour la voir).'
+        : r.code === 401 || r.code === 403 ? 'OneSignal refuse la clé API. Recopie la <b>clé API</b> (App API key) dans Réglages du système.'
+        : pasAbonne ? 'OneSignal ne connaît encore aucun appareil abonné : il faut d’abord que la ligne « abonné » ci-dessus soit ✅.'
+        : 'Réponse OneSignal (' + r.code + ') : ' + esc((e || r.brut || '').slice(0, 200)));
+    } else ajout(null, 'Envoi depuis ton script Google', 'Test lancé. Pour un diagnostic détaillé, ton script doit être en version 2.3.5 (⚙︎ Réglages → Mises à jour).');
+  } catch (e) { ajout(false, 'Envoi depuis ton script Google', esc(String(e))); }
+  rendu(true);
+}
 async function activerNotifs() {
   if (!D.notif.appId) return sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Notifications à configurer</div><div style="font-size:14px;line-height:1.5;margin-top:10px">Crée ton compte OneSignal, puis colle l'<b>App ID</b> et la <b>clé API</b> dans <b>Réglages → Réglages du système</b>.</div><button class="btn full" style="margin-top:14px" onclick="closeSheet();push('parametres')">Ouvrir les réglages</button><div></div>`);
   if (!navigator.standalone && !matchMedia('(display-mode: standalone)').matches) return toast("Ouvre l'app depuis son icône sur l'écran d'accueil pour activer les notifications.", true);
   await chargerOneSignal();
-  try { await window._OS.Notifications.requestPermission(); setTimeout(renderOverlay, 800); if (Notification.permission === 'granted') toast('Notifications activées'); } catch (e) { toast('Impossible d’activer les notifications : ' + e, true); }
+  try { await window._OS.Notifications.requestPermission(); try { if (Notification.permission === 'granted') await window._OS.User.PushSubscription.optIn(); } catch (e) {} setTimeout(renderOverlay, 800); if (Notification.permission === 'granted') toast('Notifications activées'); } catch (e) { toast('Impossible d’activer les notifications : ' + e, true); }
 }
 
 /* ═════════ VERROUILLAGE ═════════ */

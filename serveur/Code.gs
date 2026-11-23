@@ -11,7 +11,7 @@
  * ═══════════════════════════════════════════════════════════
  */
 
-const VERSION = '2.3.4';
+const VERSION = '2.3.5';
 const MARQUE = 'ICONIC Collection';
 const TZ = 'Africa/Ouagadougou';
 
@@ -1204,17 +1204,19 @@ function enregistrerApp_(d) {
 function push_(titre, texte, onglet, P) {
   try {
     P = P || params_();
-    if (!P.osAppId || !P.osKey) return;
+    if (!P.osAppId || !P.osKey) return { code: 0, texte: 'clés manquantes' };
     const url = prop_('PWA_URL');
     const corps = { app_id: P.osAppId, target_channel: 'push', included_segments: ['Total Subscriptions'],
       headings: { en: titre, fr: titre }, contents: { en: texte, fr: texte } };
     if (url) corps.url = url + '#' + (onglet || 'accueil');
     const r = UrlFetchApp.fetch('https://api.onesignal.com/notifications?c=push', {
       method: 'post', contentType: 'application/json', muteHttpExceptions: true,
-      headers: { Authorization: 'Key ' + P.osKey }, payload: JSON.stringify(corps)
+      // Nouvelles clés OneSignal (os_v2_…) : « Key » ; anciennes clés REST : « Basic »
+      headers: { Authorization: (/^os_v2_/.test(String(P.osKey).trim()) ? 'Key ' : 'Basic ') + String(P.osKey).trim() }, payload: JSON.stringify(corps)
     });
     if (r.getResponseCode() >= 300) journal_('ERREUR', 'Notification : ' + r.getContentText().slice(0, 200));
-  } catch (err) { journal_('ERREUR', 'Notification : ' + err.message); }
+    return { code: r.getResponseCode(), texte: r.getContentText().slice(0, 500) };
+  } catch (err) { journal_('ERREUR', 'Notification : ' + err.message); return { code: -1, texte: err.message }; }
 }
 
 /* ---------- Annulations ---------- */
@@ -1743,8 +1745,9 @@ function completerCompte_(d) {
 function testNotif_() {
   const P = params_();
   if (!P.osAppId || !P.osKey) throw new Error('Renseigne d\'abord l\'App ID et la clé API OneSignal.');
-  push_('🔔 Test ICONIC', 'Les notifications fonctionnent !', 'accueil', P);
-  return { ok: true };
+  const r = push_('🔔 Test ICONIC', 'Les notifications fonctionnent !', 'accueil', P) || {};
+  let j = {}; try { j = JSON.parse(r.texte || '{}'); } catch (e) {}
+  return { ok: r.code === 200 && !j.errors, code: r.code, id: j.id || '', erreurs: j.errors || null, brut: r.texte || '' };
 }
 
 /* ═════════════════════ OUTILS ═════════════════════ */
