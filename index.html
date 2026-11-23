@@ -158,7 +158,7 @@ details summary{cursor:pointer;color:var(--g2);font-size:13.5px;list-style:none}
 
 <script>
 /* ═════════ ICONIC Collection · application v2 ═════════ */
-const APP_VERSION = '2.3.3';
+const APP_VERSION = '2.3.4';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('iconic_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('iconic_' + k, JSON.stringify(v)); } catch (e) {} },
@@ -184,6 +184,7 @@ const daysTo = iso => iso ? Math.round((new Date(iso) - new Date(D.aujourdhui)) 
 const todayIso = () => new Date().toISOString().slice(0, 10);
 const isoDay = iso => { if (!iso) return ''; const d = new Date(iso); return isNaN(d) ? '' : d.toISOString().slice(0, 10); };
 const icons = {
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
   heart: '<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>', book: '<path d="M6 3h12v18H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><circle cx="12" cy="10" r="2.5"/><path d="M8.5 16c.6-1.6 2-2.5 3.5-2.5s2.9.9 3.5 2.5"/>',
   diamond: '<path d="M12 3l8 9-8 9-8-9z"/>', users: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.5 2.7-6 6-6s6 2.5 6 6"/><path d="M16 5a3 3 0 0 1 0 6M18 14c2 .6 3 2.7 3 6"/>',
   box: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M3 9h18M8 4v5"/>', chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
@@ -1162,7 +1163,8 @@ function vListeCartes() {
     return `<div class="card anim" style="margin-bottom:8px;animation-delay:${i * .04}s;${cps.length > D.params.maxCarte ? 'border-color:rgba(226,87,76,.5)' : ''}">
       <div class="sb"><div class="row">${I('card', '#f6e3a8').replace('<svg', '<svg width="22" height="22"')}<b>${esc(ca.repere)}</b></div>${ca.statut === 'Active' ? `<span class="tag ${plein ? 't-wa' : 't-ok'}">${cps.length}/${D.params.maxCarte}</span>` : tagStat(ca.statut)}</div>
       ${ca.titulaire ? `<div class="mu" style="margin-top:4px">${esc(ca.titulaire)}</div>` : ''}
-      ${cps.map(c => `<div class="mu" style="margin-top:6px">• ${esc(c.mail)} (${esc(c.type)})</div>`).join('')}
+      ${cps.map(c => `<div class="row" style="margin-top:8px;gap:8px"><button class="tap" style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:#0b0b0b;border:1px solid var(--ln);color:inherit;text-align:left;cursor:pointer" onclick="push('compte',['${c.id}'])">${I('box', '#f3dfa2').replace('<svg', '<svg width="16" height="16" style="flex:none"')}<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px"><b>${esc(c.mail)}</b><span class="mu" style="display:block;font-size:11px">${esc(c.type)}</span></span><span style="color:var(--g2)">›</span></button>${ca.statut === 'Active' ? `<button class="ib" aria-label="Retirer de la carte" style="width:42px;height:42px;flex:none" onclick="detacherCompte('${c.id}','${ca.id}')">${I('x', '#ff8a80')}</button>` : ''}</div>`).join('')}
+      ${ca.statut === 'Active' && !plein ? `<button class="btn sm sec full" style="margin-top:10px;border-style:dashed" onclick="mRelier('${ca.id}')">＋ Ajouter un compte à cette carte</button>` : ''}
       ${ca.statut === 'Active' ? `<div class="row" style="margin-top:12px;flex-wrap:wrap"><button class="btn sm sec" onclick="mCarte('${ca.id}')">Modifier</button><button class="btn sm" onclick="mRemplacer('${ca.id}')">Remplacer</button>${cps.length ? '' : `<button class="btn sm redo" onclick="mSupprimerCarte('${ca.id}')">Supprimer</button>`}</div>` : ''}</div>`;
   };
   return `<div class="grid2 anim" style="margin-top:14px"><div class="card"><div style="font-size:22px;font-weight:600;color:var(--g3)">${actives.length}</div><div class="mu">cartes actives</div></div><div class="card"><div style="font-size:22px;font-weight:600;color:var(--g3)">${D.comptes.filter(c => c.statut === 'Actif' && c.carte).length}</div><div class="mu">comptes reliés</div></div></div>
@@ -1179,6 +1181,29 @@ function mCarte(id) {
     <label class="l">Notes</label><input id="ca_n" value="${ca ? esc(ca.notes) : ''}">
     <button class="btn full" id="ca_ok">Enregistrer</button>`);
   $('#ca_ok').onclick = async () => { const d = { repere: $('#ca_r').value, titulaire: $('#ca_t').value, notes: $('#ca_n').value }; if (id) d.id = id; try { await act(id ? 'modifierCarte' : 'ajouterCarte', d, 'Carte enregistrée'); closeSheet(); } catch (e) {} };
+}
+function mRelier(id) {
+  const ca = IX.ca[id], n = D.comptes.filter(c => c.statut === 'Actif' && c.carte === id).length;
+  const l = D.comptes.filter(c => c.statut === 'Actif' && c.carte !== id).sort((a, b) => (a.carte ? 1 : 0) - (b.carte ? 1 : 0) || a.mail.localeCompare(b.mail));
+  if (!l.length) return toast('Tous tes comptes sont déjà sur cette carte.', true);
+  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Ajouter un compte</div><div class="mu" style="margin:4px 0 14px">sur ${esc(ca.repere)} · ${n}/${D.params.maxCarte} compte(s)</div>
+    <div style="max-height:52vh;overflow:auto">${l.map(c => { const autre = IX.ca[c.carte];
+      return `<button class="tap list-item" style="width:100%;background:none;border:0;border-top:1px solid #1d1d1d;color:inherit;text-align:left;cursor:pointer" onclick="relierCompte('${c.id}','${id}')"><div style="flex:1;min-width:0"><div style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${esc(c.mail)}</div><div class="mu">${esc(c.type)} · ${autre ? 'actuellement sur ' + esc(autre.repere) : '<span style="color:var(--wa)">sans carte</span>'}</div></div><span style="color:var(--g2);font-size:20px">＋</span></button>`; }).join('')}</div>`);
+}
+async function relierCompte(cid, caId) {
+  const c = IX.cp[cid], avant = c.carte || '';
+  closeSheet();
+  try { await act('modifierCompte', { id: cid, carte: caId }, null);
+    undoToast(c.mail.split('@')[0] + ' ajouté à ' + IX.ca[caId].repere, () => call('modifierCompte', { id: cid, carte: avant }));
+  } catch (e) {}
+}
+function detacherCompte(cid, caId) {
+  const c = IX.cp[cid], ca = IX.ca[caId];
+  confirmer({ titre: 'Retirer de la carte ?', icon: 'card', ok: 'Retirer', non: 'Garder',
+    texte: `<b>${esc(c.mail)}</b> ne sera plus relié à <b>${esc(ca.repere)}</b>. Le compte reste actif, simplement sans carte.`,
+    note: 'Tu pourras annuler pendant 10 secondes.',
+    action: async () => { try { await act('modifierCompte', { id: cid, carte: '' }, null);
+      undoToast(c.mail.split('@')[0] + ' retiré de la carte', () => call('modifierCompte', { id: cid, carte: caId })); } catch (e) {} } });
 }
 function mRemplacer(id) {
   const ca = IX.ca[id], n = D.comptes.filter(c => c.statut === 'Actif' && c.carte === id).length;
