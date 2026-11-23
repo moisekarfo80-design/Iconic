@@ -83,6 +83,9 @@ nav svg{width:22px;height:22px}
 .sheet{width:100%;max-width:640px;max-height:90vh;overflow-y:auto;background:#111;border-top:1px solid var(--g);border-radius:26px 26px 0 0;padding:12px 20px calc(28px + var(--bot));animation:up .3s cubic-bezier(.2,.8,.2,1)}
 .sheet.danger{border-top-color:var(--red)}
 .grab{width:40px;height:5px;border-radius:5px;background:#333;margin:0 auto 16px}
+.sh-top{position:sticky;top:-12px;z-index:3;background:#111;margin:-12px -20px 2px;padding:12px 20px 2px;touch-action:none}
+.sh-x{position:absolute;right:14px;top:10px;width:38px;height:38px;border-radius:50%;background:#1c1c1c;border:1px solid #2c2c2c;color:#d8d8d8;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0}
+.sh-x:active{transform:scale(.92);background:#262626}
 .toast{position:fixed;left:16px;right:16px;top:calc(10px + var(--top));z-index:60;background:#1c1c1c;border:1px solid var(--lg);border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.6);animation:down .3s;max-width:600px;margin:0 auto}
 .toast.err{border-color:var(--red)}
 .toast .in{display:flex;align-items:center;gap:12px;padding:12px 14px;font-size:14px}
@@ -158,7 +161,7 @@ details summary{cursor:pointer;color:var(--g2);font-size:13.5px;list-style:none}
 
 <script>
 /* ═════════ ICONIC Collection · application v2 ═════════ */
-const APP_VERSION = '2.3.4';
+const APP_VERSION = '2.3.5';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('iconic_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('iconic_' + k, JSON.stringify(v)); } catch (e) {} },
@@ -283,8 +286,14 @@ function undoToast(msg, fn) {
 
 /* ---------- fenêtres ---------- */
 function sheet(html, cls) {
-  $('#modal').innerHTML = `<div class="mbg" onclick="if(event.target===this)closeSheet()"><div class="sheet ${cls || ''}"><div class="grab"></div>${html}</div></div>`;
+  $('#modal').innerHTML = `<div class="mbg" onclick="if(event.target===this)closeSheet()"><div class="sheet ${cls || ''}"><div class="sh-top"><div class="grab"></div><button class="sh-x" aria-label="Fermer" onclick="closeSheet()">${I('x', '#d8d8d8').replace('<svg', '<svg width="18" height="18"')}</button></div>${html}</div></div>`;
+  // Glisser vers le bas depuis le haut de la fenêtre pour la fermer
+  const sh = $('#modal .sheet'), top = $('#modal .sh-top'); let y0 = null, dy = 0;
+  top.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; dy = 0; sh.style.transition = 'none'; }, { passive: true });
+  top.addEventListener('touchmove', e => { if (y0 == null) return; dy = Math.max(0, e.touches[0].clientY - y0); sh.style.transform = `translateY(${dy}px)`; }, { passive: true });
+  top.addEventListener('touchend', () => { sh.style.transition = 'transform .2s'; if (dy > 90) { sh.style.transform = 'translateY(100%)'; setTimeout(closeSheet, 180); } else sh.style.transform = ''; y0 = null; });
 }
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal').innerHTML) closeSheet(); });
 function closeSheet() { $('#modal').innerHTML = ''; }
 function confirmer(o) {
   sheet(`<div style="text-align:center">
@@ -906,7 +915,8 @@ function mVenteManuelle(clientId) {
     <div id="vm_note" class="mu" style="margin:-4px 0 10px"></div>
     <label class="l">Date de début</label><input id="vm_d" type="date" value="${todayIso()}">
     <label class="l">Place (laisse « Automatique » si tu ne sais pas)</label><select id="vm_p"></select>
-    <button class="btn full" onclick="venteManuelle()">Enregistrer</button>`);
+    <button class="btn full" onclick="venteManuelle()">Enregistrer</button>
+    <button class="btn ghost full" style="margin-top:8px" onclick="closeSheet()">Annuler</button>`);
   vmPlaces(); vmPrix();
 }
 let VM_EDIT = false;
@@ -1119,7 +1129,8 @@ function mCompte(id) {
     <div class="grid2"><div><label class="l">Coût mensuel (F)</label><input id="fc_cout" inputmode="numeric" value="${c ? c.cout : t0.cout}"></div><div><label class="l">Nombre de places</label><input id="fc_pl" inputmode="numeric" value="${c ? c.places : t0.places}" oninput="fcProfils()"></div></div>
     <label class="l">Date d'expiration de l'abonnement</label><input id="fc_exp" type="date" value="${c ? isoDay(c.expiration) : ''}">
     ${c ? '' : `<label class="l">Profils et codes (tu peux les compléter plus tard)</label><div id="fc_profils"></div>`}
-    <button class="btn full" onclick="saveCompte('${id || ''}')">Enregistrer</button>`);
+    <button class="btn full" onclick="saveCompte('${id || ''}')">Enregistrer</button>
+    <button class="btn ghost full" style="margin-top:8px" onclick="closeSheet()">Annuler</button>`);
   if (!c) fcProfils();
 }
 function fcType() { const t = D.types.find(x => x.type === $('#fc_type').value); if (t) { $('#fc_cout').value = t.cout; $('#fc_pl').value = t.places; fcProfils(); } }
@@ -1179,7 +1190,8 @@ function mCarte(id) {
     <label class="l">Repère (jamais le numéro complet)</label><input id="ca_r" placeholder="Ex. Visa Coris …4521" value="${ca ? esc(ca.repere) : ''}">
     <label class="l">Titulaire</label><input id="ca_t" value="${ca ? esc(ca.titulaire) : ''}">
     <label class="l">Notes</label><input id="ca_n" value="${ca ? esc(ca.notes) : ''}">
-    <button class="btn full" id="ca_ok">Enregistrer</button>`);
+    <button class="btn full" id="ca_ok">Enregistrer</button>
+    <button class="btn ghost full" style="margin-top:8px" onclick="closeSheet()">Annuler</button>`);
   $('#ca_ok').onclick = async () => { const d = { repere: $('#ca_r').value, titulaire: $('#ca_t').value, notes: $('#ca_n').value }; if (id) d.id = id; try { await act(id ? 'modifierCarte' : 'ajouterCarte', d, 'Carte enregistrée'); closeSheet(); } catch (e) {} };
 }
 function mRelier(id) {
