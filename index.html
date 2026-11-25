@@ -91,8 +91,8 @@ nav svg{width:22px;height:22px}
 .pass .pr2{width:92px;border-left:2px dashed #3a3115;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;position:relative;flex:none}
 .pass .pr2:before,.pass .pr2:after{content:'';position:absolute;left:-10px;width:18px;height:18px;border-radius:50%;background:var(--bg,#070707);border:1px solid #3a3115}
 .pass .pr2:before{top:-10px}.pass .pr2:after{bottom:-10px}
-.ring{width:54px;height:54px;border-radius:50%;padding:3px;flex:none}
-.ring>div{width:100%;height:100%;border-radius:50%;background:#101010;display:flex;align-items:center;justify-content:center;font-family:Cinzel,serif;font-weight:700;font-size:20px;color:var(--g3,#f6e3a8)}
+.tring{width:54px;height:54px;border-radius:50%;padding:3px;flex:none}
+.tring>div{width:100%;height:100%;border-radius:50%;background:#101010;display:flex;align-items:center;justify-content:center;font-family:Cinzel,serif;font-weight:700;font-size:20px;color:var(--g3,#f6e3a8)}
 .dg{font-family:Cinzel,serif;font-weight:700;font-size:20px;letter-spacing:3px;color:var(--g3,#f6e3a8)}
 .chipst{font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;letter-spacing:.4px}
 .digit{width:50px;height:60px;border-radius:14px;background:#171717;border:1px solid #4a3c14;display:flex;align-items:center;justify-content:center;font-family:Cinzel,serif;font-size:28px;font-weight:700;color:var(--g3,#f6e3a8)}
@@ -176,7 +176,7 @@ details summary{cursor:pointer;color:var(--g2);font-size:13.5px;list-style:none}
 
 <script>
 /* ═════════ ICONIC Collection · application v2 ═════════ */
-const APP_VERSION = '2.5.0';
+const APP_VERSION = '2.5.1';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('iconic_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('iconic_' + k, JSON.stringify(v)); } catch (e) {} },
@@ -976,8 +976,13 @@ function mVenteManuelle(clientId) {
   VM_EDIT = false;
   sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Vente manuelle</div><div class="mu" style="margin:4px 0 14px">Espèces, somme différente du tarif, ou client à enregistrer.</div>
     ${ht.length ? `<label class="l">Paiement reçu par SMS (montant hors tarif)</label><select id="vm_ht" onchange="vmHt()"><option value="">— Aucun (espèces ou autre) —</option>${ht.map(h => `<option value="${h.id}">${F(h.montant)} · ${esc((IX.cl[h.clientId] || {}).nom || h.nom || h.numero)} · ${dt(h.date)}</option>`).join('')}</select>` : ''}
-    <label class="l">Client</label><select id="vm_cl" onchange="$('#vm_new').style.display=this.value?'none':'block'"><option value="">➕ Nouveau client</option>${actifs.map(c => `<option value="${c.id}" ${c.id === clientId ? 'selected' : ''}>${esc(c.nom)} · ${esc(c.numeros.join(', '))}</option>`).join('')}</select>
-    <div id="vm_new" style="display:${clientId ? 'none' : 'block'}"><label class="l">Nom</label><input id="vm_nom"><label class="l">Numéro</label><input id="vm_num" inputmode="tel" placeholder="70 00 00 00"></div>
+    <label class="l">Client</label><input type="hidden" id="vm_cl" value="${clientId || ''}">
+    <div id="vm_choix"></div>
+    <div id="vm_cherche" style="position:relative;display:${clientId ? 'none' : 'block'}">
+      <input id="vm_q" autocomplete="off" placeholder="🔍 Tape le nom ou le numéro d'un ancien client" oninput="vmCherche()" onfocus="vmCherche()">
+      <div id="vm_res" style="margin:-6px 0 10px"></div>
+    </div>
+    <div id="vm_new" style="display:${clientId ? 'none' : 'block'}"><div class="mu" style="margin:0 0 4px;font-size:12px">… ou un <b>nouveau client</b> :</div><label class="l">Nom</label><input id="vm_nom"><label class="l">Numéro</label><input id="vm_num" inputmode="tel" placeholder="70 00 00 00"></div>
     <label class="l">Session</label><select id="vm_s" onchange="vmPlaces();vmPrix()">${D.sessions.map(s => `<option value="${s.code}">${esc(s.libelle)} · ${F(s.prix)}</option>`).join('')}</select>
     <label class="l">Montant reçu (F)</label><input id="vm_m" inputmode="numeric" oninput="VM_EDIT=true;vmNote()">
     <div id="vm_note" class="mu" style="margin:-4px 0 10px"></div>
@@ -986,7 +991,29 @@ function mVenteManuelle(clientId) {
     <button class="btn full" onclick="venteManuelle()">Enregistrer</button>
     <button class="btn ghost full" style="margin-top:8px" onclick="closeSheet()">Annuler</button>`);
   vmPlaces(); vmPrix();
+  if (clientId) vmChoisir(clientId);
 }
+function vmCherche() {
+  const q = nrm($('#vm_q').value), qn = $('#vm_q').value.replace(/\D/g, ''), box = $('#vm_res');
+  if (!q && !qn) { box.innerHTML = ''; return; }
+  const ok = c => (q && nrm(c.nom).includes(q)) || (qn.length >= 3 && c.numeros.concat(c.whatsapp || []).some(n => String(n).includes(qn)));
+  const l = D.clients.filter(c => c.statut !== 'Supprimé' && ok(c)).sort((a, b) => nrm(a.nom).indexOf(q) - nrm(b.nom).indexOf(q) || a.nom.localeCompare(b.nom)).slice(0, 6);
+  box.innerHTML = l.length ? l.map(c => { const a = D.abos.filter(x => x.client === c.id).sort((x, y) => new Date(y.expiration || 0) - new Date(x.expiration || 0))[0];
+    return `<button class="tap list-item" style="width:100%;background:#0b0b0b;border:1px solid var(--ln);border-radius:12px;margin-top:6px;padding:10px 12px;color:inherit;text-align:left;cursor:pointer" onclick="vmChoisir('${c.id}')">
+      <div class="av" style="width:34px;height:34px;font-size:11px">${esc(ini(c.nom))}</div><div style="flex:1;min-width:0"><b style="font-size:14px">${esc(c.nom)}</b><div class="mu" style="font-size:11.5px">${esc(c.numeros.join(' · ') || 'sans numéro')}${a ? ' · ' + esc(courtType(a.type)) + ' · ' + esc(a.statut === 'Terminé' ? 'ancien' : a.statut.toLowerCase()) : ''}</div></div><span style="color:var(--g2)">›</span></button>`; }).join('')
+    : `<div class="mu" style="margin-top:8px;font-size:12.5px">Aucun client trouvé : remplis « nouveau client » ci-dessous.</div>`;
+}
+function vmChoisir(id) {
+  const c = IX.cl[id]; if (!c) return;
+  $('#vm_cl').value = id; $('#vm_cherche').style.display = 'none'; $('#vm_new').style.display = 'none';
+  $('#vm_choix').innerHTML = `<div class="row" style="gap:12px;padding:10px 12px;border-radius:14px;background:rgba(212,175,55,.08);border:1px solid var(--g);margin-bottom:12px">
+    <div class="av g" style="width:36px;height:36px;font-size:12px">${esc(ini(c.nom))}</div><div style="flex:1;min-width:0"><b>${esc(c.nom)}</b><div class="mu" style="font-size:11.5px">${esc(c.numeros.join(' · ') || 'sans numéro')}</div></div>
+    <button class="tag" style="cursor:pointer;background:none" onclick="vmChanger()">Changer</button></div>`;
+  // propose la même formule que son dernier abonnement
+  const a = D.abos.filter(x => x.client === id && x.session).sort((x, y) => new Date(y.expiration || 0) - new Date(x.expiration || 0))[0];
+  if (a && IX.se[a.session] && $('#vm_s').value !== a.session) { $('#vm_s').value = a.session; vmPlaces(); vmPrix(); }
+}
+function vmChanger() { $('#vm_cl').value = ''; $('#vm_choix').innerHTML = ''; $('#vm_cherche').style.display = 'block'; $('#vm_new').style.display = 'block'; $('#vm_q').value = ''; $('#vm_res').innerHTML = ''; $('#vm_q').focus(); }
 let VM_EDIT = false;
 function vmPrix() { const s = IX.se[$('#vm_s').value]; if (s && !VM_EDIT) $('#vm_m').value = s.prix; vmNote(); }
 function vmNote() {
@@ -997,8 +1024,8 @@ function vmHt() {
   const h = (D.horsTarif || []).find(x => x.id === $('#vm_ht').value), nw = $('#vm_new');
   if (!h) { $('#vm_num').disabled = false; return; }
   $('#vm_m').value = h.montant; VM_EDIT = true; $('#vm_d').value = isoDay(h.date);
-  if (h.clientId) { $('#vm_cl').value = h.clientId; nw.style.display = 'none'; }
-  else { $('#vm_cl').value = ''; nw.style.display = 'block'; $('#vm_nom').value = h.nom || ''; $('#vm_num').value = h.numero; }
+  if (h.clientId) vmChoisir(h.clientId);
+  else { vmChanger(); $('#vm_nom').value = h.nom || ''; $('#vm_num').value = h.numero; }
   vmNote();
 }
 function vmPlaces() {
@@ -1164,14 +1191,14 @@ SCREENS.compte = function (id) {
   const resume = [cpt('p') + ' payé(s)', cpt('g') ? cpt('g') + ' grâce' : '', cpt('i') ? cpt('i') + ' impayé(s)' : '', pls.filter(p => p.etat === 'Libre').length + ' libre(s)', pls.filter(p => p.etat === 'À préparer').length ? pls.filter(p => p.etat === 'À préparer').length + ' à préparer' : ''].filter(Boolean).join(' · ');
   const ticket = p => {
     const e = etatPlace(p), cl = IX.cl[p.client];
-    if (e) return `<button class="pass" onclick="mPass('${p.id}')"><div class="pl"><div class="ring" style="background:conic-gradient(${e.col} 0 ${e.pct}%,#262626 0 100%)"><div>${esc(((cl && cl.nom) || p.profil || '?')[0].toUpperCase())}</div></div>
+    if (e) return `<button class="pass" onclick="mPass('${p.id}')"><div class="pl"><div class="tring" style="background:conic-gradient(${e.col} 0 ${e.pct}%,#262626 0 100%)"><div>${esc(((cl && cl.nom) || p.profil || '?')[0].toUpperCase())}</div></div>
       <div style="min-width:0"><div class="row" style="gap:6px"><b style="font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(cl ? cl.nom : '?')}</b><span class="chipst" style="background:${e.bg};color:${e.col}">${e.chip}</span></div>
       <div class="mu" style="font-size:12px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${mus ? esc((cl && (cl.whatsapp || cl.numeros[0])) || '') : 'profil « ' + esc(p.profil || '—') + ' »'}</div><div style="font-size:11px;margin-top:4px;color:${e.col}">${esc(e.txt)}</div></div></div>
       <div class="pr2"><span class="mu" style="font-size:9.5px;letter-spacing:1.5px">PLACE ${p.n}</span>${mus ? '<span style="font-size:22px">🎧</span>' : `<span class="dg">${VOIR_CODES ? esc(p.code || '—') : '••••'}</span><span class="mu" style="font-size:9.5px">code</span>`}</div></button>`;
-    if (p.etat === 'Libre') return `<button class="pass" style="border-style:dashed;background:#0d0d0d" onclick="mPass('${p.id}')"><div class="pl"><div class="ring" style="background:#3a3115"><div style="font-family:Montserrat;font-size:24px">＋</div></div>
+    if (p.etat === 'Libre') return `<button class="pass" style="border-style:dashed;background:#0d0d0d" onclick="mPass('${p.id}')"><div class="pl"><div class="tring" style="background:#3a3115"><div style="font-family:Montserrat;font-size:24px">＋</div></div>
       <div><b style="font-size:15px;color:var(--g2)">${mus ? 'Place libre' : esc(p.profil || 'Libre')}</b><div class="mu" style="font-size:12px;margin-top:3px">${mus ? 'prête pour le prochain client' : 'place libre · prête'}</div></div></div>
       <div class="pr2"><span class="mu" style="font-size:9.5px;letter-spacing:1.5px">PLACE ${p.n}</span>${mus ? '<span style="font-size:22px;opacity:.5">🎧</span>' : `<span class="dg" style="color:#777">${VOIR_CODES ? esc(p.code || '—') : '••••'}</span><span class="mu" style="font-size:9.5px">code</span>`}</div></button>`;
-    return `<button class="pass" style="border:1.5px dashed #3a3a3a;background:#0d0d0d" onclick="mPreparer('${p.id}')"><div class="pl"><div class="ring" style="background:#2a2a2a"><div style="font-family:Montserrat;font-size:20px;color:#888">✎</div></div>
+    return `<button class="pass" style="border:1.5px dashed #3a3a3a;background:#0d0d0d" onclick="mPreparer('${p.id}')"><div class="pl"><div class="tring" style="background:#2a2a2a"><div style="font-family:Montserrat;font-size:20px;color:#888">✎</div></div>
       <div><b style="font-size:15px;color:#bbb">À préparer</b><div class="mu" style="font-size:12px;margin-top:3px">nouveau profil + code</div></div></div>
       <div class="pr2"><span class="mu" style="font-size:9.5px;letter-spacing:1.5px">PLACE ${p.n}</span><span class="dg" style="color:#555;letter-spacing:1px">— —</span><span class="mu" style="font-size:9.5px">touche</span></div></button>`;
   };
