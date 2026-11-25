@@ -11,7 +11,7 @@
  * ═══════════════════════════════════════════════════════════
  */
 
-const VERSION = '2.3.5';
+const VERSION = '2.3.6';
 const MARQUE = 'ICONIC Collection';
 const TZ = 'Africa/Ouagadougou';
 
@@ -330,6 +330,8 @@ function api(key, action, d) {
       case 'ignorer': r = ignorerVente_(d); break;
       case 'manuelle': r = venteManuelle_(d); break;
       case 'liberer': r = liberer_(d); break;
+      case 'libererLot': r = { ok: true, places: (d.aboIds || []).map(function (id) { try { return liberer_({ aboId: id }).placeId; } catch (e) { return null; } }) }; break;
+      case 'annulerLiberationLot': (d.aboIds || []).forEach(function (id) { try { annulerLiberation_({ aboId: id }); } catch (e) {} }); r = { ok: true }; break;
       case 'preparer': r = preparerPlace_(d); break;
       case 'ajouterCompte': r = ajouterCompte_(d); break;
       case 'modifierCompte': r = modifierCompte_(d); break;

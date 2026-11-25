@@ -96,6 +96,10 @@ nav svg{width:22px;height:22px}
 .dg{font-family:Cinzel,serif;font-weight:700;font-size:20px;letter-spacing:3px;color:var(--g3,#f6e3a8)}
 .chipst{font-size:10px;font-weight:700;padding:3px 8px;border-radius:8px;letter-spacing:.4px}
 .digit{width:50px;height:60px;border-radius:14px;background:#171717;border:1px solid #4a3c14;display:flex;align-items:center;justify-content:center;font-family:Cinzel,serif;font-size:28px;font-weight:700;color:var(--g3,#f6e3a8)}
+#sync{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(96px + env(safe-area-inset-bottom));z-index:80;display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:20px;background:rgba(20,20,20,.94);border:1px solid #3a3115;color:var(--g2,#f3dfa2);font-size:12.5px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.5);transition:opacity .4s}
+#sync.fin{opacity:0}
+#sync .spin{width:12px;height:12px;border-radius:50%;border:2px solid #4a3c14;border-top-color:#f3dfa2;animation:tourne .8s linear infinite}
+@keyframes tourne{to{transform:rotate(360deg)}}
 .sh-x:active{transform:scale(.92);background:#262626}
 .toast{position:fixed;left:16px;right:16px;top:calc(10px + var(--top));z-index:60;background:#1c1c1c;border:1px solid var(--lg);border-radius:16px;overflow:hidden;box-shadow:0 12px 30px rgba(0,0,0,.6);animation:down .3s;max-width:600px;margin:0 auto}
 .toast.err{border-color:var(--red)}
@@ -172,7 +176,7 @@ details summary{cursor:pointer;color:var(--g2);font-size:13.5px;list-style:none}
 
 <script>
 /* ═════════ ICONIC Collection · application v2 ═════════ */
-const APP_VERSION = '2.4.1';
+const APP_VERSION = '2.5.0';
 const LS = {
   get(k, d) { try { const v = localStorage.getItem('iconic_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
   set(k, v) { try { localStorage.setItem('iconic_' + k, JSON.stringify(v)); } catch (e) {} },
@@ -235,7 +239,9 @@ async function call(action, data, cfg) {
 }
 let LAST_LOAD = 0;
 function appliquer(d) {
-  D = d; LAST_LOAD = Date.now(); LS.set('cache', D); indexer();
+  D = d; LAST_LOAD = Date.now(); indexer();
+  LOCAUX.forEach(x => { try { x.fn(); } catch (e) {} }); if (LOCAUX.length) indexer();
+  LS.set('cache', D);
   if (!LOCKED) { render(); renderOverlay(); }
 }
 function indexer() {
@@ -258,16 +264,31 @@ async function refresh(quiet, force) {
   })();
   return loading;
 }
-async function act(action, data, msg, opts) {
+/* Les actions partent dans une file (une à la fois, dans l'ordre). L'écran est mis à jour
+   tout de suite (opts.local), sans attendre Google : c'est ce qui rend l'app rapide. */
+let FILE = Promise.resolve(), ENVOIS = 0, LOCAUX = [];
+function enFile(fn) { const p = FILE.then(fn); FILE = p.catch(() => {}); return p; }
+function pastille() {
+  let el = $('#sync');
+  if (!ENVOIS) { if (el) { el.classList.add('fin'); setTimeout(() => { if (!ENVOIS && el) el.remove(); }, 500); } return; }
+  if (!el) { el = document.createElement('div'); el.id = 'sync'; document.body.appendChild(el); }
+  el.classList.remove('fin');
+  el.innerHTML = `<span class="spin"></span>Enregistrement${ENVOIS > 1 ? ' (' + ENVOIS + ')' : ''}…`;
+}
+function act(action, data, msg, opts) {
   opts = opts || {};
-  busy(true);
-  try {
-    const r = await call(action, data);
-    busy(false);
-    if (opts.undo) undoToast(msg, opts.undo); else if (msg) toast(msg);
-    refresh(true);
+  const loc = opts.local ? { fn: opts.local } : null;
+  if (loc) { LOCAUX.push(loc); try { loc.fn(); indexer(); if (!LOCKED) { render(); renderOverlay(); } } catch (e) {} }
+  if (opts.tout_de_suite && msg) { if (opts.undo) undoToast(msg, opts.undo); else toast(msg); }
+  ENVOIS++; pastille();
+  return enFile(() => call(action, data)).then(r => {
+    ENVOIS--; if (loc) LOCAUX = LOCAUX.filter(x => x !== loc); pastille();
+    if (!opts.tout_de_suite) { if (opts.undo) undoToast(msg, opts.undo); else if (msg) toast(msg); }
     return r;
-  } catch (e) { busy(false); toast(String(e), true); throw e; }
+  }, e => {
+    ENVOIS--; if (loc) LOCAUX = LOCAUX.filter(x => x !== loc); pastille();
+    toast(String(e), true); refresh(true, true); throw e;
+  });
 }
 let busyEl = null, busyT = null;
 function busy(on) {
@@ -291,7 +312,7 @@ function undoToast(msg, fn) {
   el.innerHTML = `<div class="in">${I('check', '#7fd6a3').replace('<svg', '<svg width="20" height="20"')}<span style="flex:1">${esc(msg)}</span><button class="btn sec sm" style="border:0;color:var(--g3);font-weight:700">ANNULER</button></div><div class="pg"><i></i></div>`;
   document.body.appendChild(el);
   const bar = el.querySelector('.pg i'); bar.animate([{ width: '100%' }, { width: '0%' }], { duration: 10000, easing: 'linear' });
-  el.querySelector('button').onclick = async () => { el.remove(); try { busy(true); await fn(); busy(false); toast('Action annulée'); refresh(true); } catch (e) { busy(false); toast(String(e), true); } };
+  el.querySelector('button').onclick = async () => { el.remove(); ENVOIS++; pastille(); try { await enFile(fn); toast('Action annulée'); refresh(true, true); } catch (e) { toast(String(e), true); } finally { ENVOIS--; pastille(); } };
   toastT = setTimeout(() => el.remove(), 10000);
 }
 
@@ -556,13 +577,11 @@ function mLiberer(aboId, btn) {
     note: 'Tu pourras annuler pendant 10 secondes.',
     action: async () => {
       sortir(btn);
-      const retirerArgent = !!window._LBR;
-      try {
-        const r = await act('liberer', { aboId, retirerArgent }, null);
-        const rb = r && r.rembourse;
-        undoToast(rb ? `Place libérée · ${F(rb.montant)} retirés de tes gains` : 'Place libérée', () => call('annulerLiberation', { aboId, venteId: rb ? rb.venteId : '', montant: rb ? rb.montant : 0 }));
-        if (r && r.placeId) setTimeout(() => mPreparer(r.placeId), 700);
-      } catch (e) {}
+      const retirerArgent = !!window._LBR, dansListe = STACK.length && STACK[STACK.length - 1].name === 'retirer';
+      let rb = null;
+      act('liberer', { aboId, retirerArgent }, null, { local: () => retraitLocal([aboId]) }).then(r => { rb = r && r.rembourse; if (rb) toast(F(rb.montant) + ' retirés de tes gains'); }).catch(() => {});
+      undoToast((IX.cl[a.client] || {}).nom ? IX.cl[a.client].nom + ' retiré(e)' : 'Place libérée', () => call('annulerLiberation', { aboId, venteId: rb ? rb.venteId : '', montant: rb ? rb.montant : 0 }));
+      if (!dansListe && p.id && !estMusique(cp)) setTimeout(() => mPreparer(p.id), 700);
     } });
 }
 function mPreparer(placeId) {
@@ -578,7 +597,8 @@ async function preparer(placeId) {
   const d = { placeId, profil: $('#pp_p').value, code: $('#pp_c').value };
   if (!d.profil.trim() || !d.code.trim()) return toast('Saisis le profil et le code.', true);
   closeSheet();
-  try { const r = await act('preparer', d, 'Place prête'); if (r && r.placement) push('succes', [r.placement]); } catch (e) {}
+  act('preparer', d, 'Place prête', { local: () => { const p = IX.pl[placeId]; if (p) { p.profil = d.profil.trim(); p.code = d.code.trim(); if (p.etat === 'À préparer') p.etat = 'Libre'; } if (D.digest.aPreparer) D.digest.aPreparer = D.digest.aPreparer.filter(x => x.id !== placeId); } })
+    .then(r => { if (r && r.placement) push('succes', [r.placement]); }).catch(() => {});
 }
 function mPayer(id, btn) {
   const c = IX.cp[id];
@@ -613,10 +633,47 @@ function mAPreparer() {
   sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Places à préparer</div><div class="mu" style="margin:4px 0 10px">Saisis le profil et le code quand tu les connais. Ces places ne sont pas attribuées tant qu'elles ne sont pas prêtes.</div>
     ${Object.keys(par).map(c => `<div style="margin-top:12px;font-weight:600;font-size:13px;color:var(--g2)">${esc(c)}</div>` + par[c].map(p => `<div class="list-item"><div style="flex:1">Place ${p.n}<div class="mu">depuis ${p.jours} j</div></div><button class="btn sm sec" onclick="closeSheet();mPreparer('${p.id}')">Préparer</button></div>`).join('')).join('')}`);
 }
-function mExpires() {
-  const l = D.digest.aRetirer.slice().sort((a, b) => b.jours - a.jours);
-  sheet(`<div class="serif" style="font-size:19px;color:var(--g2)">Expirés non payés</div><div class="mu" style="margin:4px 0 10px">Envoie d'abord un <b>rappel</b>. S'il ne paie pas, touche <b>Retirer</b>. S'il paie, son paiement sera reconnu et il gardera sa place.</div>
-    ${l.map(b => `<div class="list-item"><div class="av">${esc(ini(b.client))}</div><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:14px">${esc(b.client)}</div><div class="mu">expiré le ${dt(b.expiration)} · ${esc(b.compte.split('@')[0])} place ${b.place}</div></div><div class="row" style="gap:6px"><a class="btn sm wa" href="${b.wa}" target="_blank" rel="noopener">Rappel</a><button class="btn sm redo" onclick="closeSheet();mLiberer('${b.id}')">Retirer</button></div></div>`).join('')}`);
+function mExpires() { push('retirer'); }
+/** Mise à jour immédiate de l'écran quand on retire des clients (avant la réponse de Google). */
+function retraitLocal(ids) {
+  ids.forEach(id => {
+    const a = IX.ab[id]; if (!a || a.statut === 'Terminé') return;
+    const p = IX.pl[a.place], cp = IX.cp[a.compte];
+    if (p && p.abo === id) { p.etat = estMusique(cp) ? 'Libre' : 'À préparer'; p.client = ''; p.abo = ''; }
+    a.statut = 'Terminé'; a.place = '';
+  });
+  ['aRetirer', 'grace', 'expirent', 'dettes'].forEach(k => { if (D.digest[k]) D.digest[k] = D.digest[k].filter(x => !ids.includes(x.id)); });
+  ids.forEach(id => delete SEL_R[id]);
+}
+let SEL_R = {};
+SCREENS.retirer = function () {
+  const l = D.digest.aRetirer.slice().sort((a, b) => a.jours - b.jours);
+  Object.keys(SEL_R).forEach(id => { if (!l.some(x => x.id === id)) delete SEL_R[id]; });
+  const n = Object.keys(SEL_R).length;
+  const ligne = b => `<div class="list-item" style="gap:12px">
+      <input type="checkbox" style="width:24px;height:24px;flex:none;margin:0;accent-color:#d4af37" ${SEL_R[b.id] ? 'checked' : ''} onchange="if(this.checked)SEL_R['${b.id}']=1;else delete SEL_R['${b.id}'];renderOverlay()">
+      <div style="flex:1;min-width:0" onclick="push('client',['${b.clientId}'])"><div style="font-weight:600;font-size:14px">${esc(b.client)}</div><div class="mu" style="font-size:11.5px">expiré depuis ${Math.abs(b.jours)} j · ${esc(b.compte.split('@')[0])} · place ${b.place}</div></div>
+      <a class="btn sm wa" style="width:auto;padding:0 12px" href="${b.wa}" target="_blank" rel="noopener">Rappel</a>
+      <button class="btn sm redo" style="width:auto;padding:0 12px" onclick="mLiberer('${b.id}')">Retirer</button></div>`;
+  return `${head('À retirer', l.length + ' client(s) expiré(s) non payé(s)')}
+  <div style="padding:6px 20px calc(${n ? 150 : 40}px + var(--bot))">
+    ${l.length ? `<div class="mu" style="margin:6px 0 10px;line-height:1.45">Envoie d'abord un <b>rappel</b>. S'il ne paie pas, retire-le. Coche plusieurs clients pour les retirer d'un coup.</div>
+    <div class="row" style="gap:8px;margin-bottom:6px"><button class="tag" style="cursor:pointer;background:none" onclick="D.digest.aRetirer.forEach(x=>SEL_R[x.id]=1);renderOverlay()">Tout cocher</button>${n ? `<button class="tag" style="cursor:pointer;background:none" onclick="SEL_R={};renderOverlay()">Tout décocher</button>` : ''}</div>
+    ${l.map(ligne).join('')}` : `<div class="empty" style="padding-top:60px"><div class="serif" style="color:var(--g2);font-size:20px">Plus personne à retirer ✨</div></div>`}
+  </div>
+  ${n ? `<div style="position:fixed;left:0;right:0;bottom:0;z-index:30;padding:12px 20px calc(14px + var(--bot));background:rgba(10,10,10,.97);border-top:1px solid #2b2410">
+    <button class="btn red full" onclick="retirerSelection()">Retirer les ${n} client(s) coché(s)</button></div>` : ''}`;
+};
+function retirerSelection() {
+  const ids = Object.keys(SEL_R); if (!ids.length) return;
+  const noms = ids.map(id => (IX.cl[(IX.ab[id] || {}).client] || {}).nom).filter(Boolean);
+  confirmer({ titre: 'Retirer ' + ids.length + ' client(s) ?', icon: 'userx', danger: true, ok: 'Oui, retirer', non: 'Non',
+    texte: `${esc(noms.slice(0, 6).join(', '))}${noms.length > 6 ? ' et ' + (noms.length - 6) + ' autre(s)' : ''}.<br><br>Pense à les retirer aussi dans les comptes. Leurs places seront à préparer.`,
+    note: 'Tu pourras annuler pendant 10 secondes.',
+    action: () => {
+      act('libererLot', { aboIds: ids }, ids.length + ' client(s) retiré(s)', { local: () => retraitLocal(ids), tout_de_suite: true, undo: () => call('annulerLiberationLot', { aboIds: ids }) }).catch(() => {});
+      SEL_R = {};
+    } });
 }
 function mDettes() {
   const l = D.digest.dettes;
@@ -1238,8 +1295,9 @@ async function saveCompte(id) {
   const avant = id ? Object.assign({}, IX.cp[id]) : null;
   if (id) d.id = id; else { d.type = $('#fc_type').value; d.profils = estMusique({ type: d.type }) ? [] : [...document.querySelectorAll('#fc_profils .pr')].map(r => ({ profil: r.children[0].value, code: r.children[1].value })); }
   try {
-    await act(id ? 'modifierCompte' : 'ajouterCompte', d, id ? 'Compte mis à jour' : 'Compte ajouté'); closeSheet();
-    if (avant) proposerPrevenir(id, avant, d);
+    closeSheet();
+    const loc = id ? () => { const c = IX.cp[id]; if (c) ['mail', 'mdp', 'nom', 'tel', 'carte', 'lien', 'adresse'].forEach(k => { if (d[k] !== undefined) c[k] = d[k]; }); } : null;
+    act(id ? 'modifierCompte' : 'ajouterCompte', d, id ? 'Compte mis à jour' : 'Compte ajouté', { local: loc }).then(() => { if (avant) proposerPrevenir(id, avant, d); }).catch(() => {});
   } catch (e) {}
 }
 function mAccesMusique(id) {
@@ -1253,7 +1311,8 @@ function mAccesMusique(id) {
     <button class="btn ghost full" style="margin-top:8px" onclick="closeSheet()">Annuler</button>`);
   $('#am_ok').onclick = async () => {
     const avant = Object.assign({}, c), d = { id, lien: $('#am_l').value.trim(), adresse: $('#am_a').value.trim() };
-    try { await act('modifierCompte', d, 'Accès mis à jour'); closeSheet(); proposerPrevenir(id, avant, d); } catch (e) {}
+    closeSheet();
+    act('modifierCompte', d, 'Accès mis à jour', { local: () => { const k = IX.cp[id]; if (k) { k.lien = d.lien; k.adresse = d.adresse; } } }).then(() => proposerPrevenir(id, avant, d)).catch(() => {});
   };
 }
 /* ── Prévenir les clients après un changement d'identifiants ── */
